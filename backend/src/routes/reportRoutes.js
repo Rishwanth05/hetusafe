@@ -237,7 +237,18 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
   }
 });
 
-router.post("/resolve", upload.single("proof"), async (req, res) => {
+router.post("/resolve", (req, res, next) => {
+  upload.single('proof')(req, res, (err) => {
+    if (err) {
+      console.error('Multer/S3 upload error (resolve):', err)
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Please upload a photo below 5MB.' })
+      }
+      return res.status(400).json({ error: err.message })
+    }
+    next()
+  })
+}, async (req, res) => {
   try {
     const { report_id } = req.body;
 

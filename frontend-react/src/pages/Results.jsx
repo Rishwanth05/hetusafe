@@ -69,7 +69,9 @@ function ResolveModal({ report, onClose, onResolved }) {
       onResolved(report.id, response.data.proofUrl)
       onClose()
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to resolve report')
+      const errData = err.response?.data?.error
+      const errMsg = typeof errData === 'string' ? errData : errData?.message
+      setError(errMsg || err.response?.data?.message || 'Failed to resolve report')
     } finally {
       setSubmitting(false)
     }
