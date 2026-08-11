@@ -17,7 +17,7 @@
     "posthog-js": "^1.376.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router-dom": "^7.15.0",
+    "react-router-dom": "^7.18.2",
     "recharts": "^2.12.7",
     "socket.io-client": "^4.8.3"
   },
