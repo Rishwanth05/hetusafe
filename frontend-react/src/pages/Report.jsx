@@ -205,7 +205,7 @@ export default function Report() {
       await client.post('/reports/create', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       navigate('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.message || 'Submission failed')
+      setError(err.response?.data?.error || err.response?.data?.message || 'Submission failed')
     } finally {
       setSubmitting(false)
     }
