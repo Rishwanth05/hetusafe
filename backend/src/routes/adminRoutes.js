@@ -2,11 +2,30 @@ const express = require('express');
 const pool = require('../db');
 const redis = require('../config/redis');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
+const { z } = require('zod');
 
 const router = express.Router();
 
 // All admin routes require auth + admin role
 router.use(verifyToken, requireAdmin);
+
+// ── Validation middleware ─────────────────────────────────────────────────────
+function validate(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.issues[0].message });
+    }
+    req.body = result.data;
+    next();
+  };
+}
+
+const broadcastSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or less'),
+  message: z.string().min(1, 'Message is required').max(500, 'Message must be 500 characters or less'),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+});
 
 // ── DASHBOARD STATS ────────────────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
@@ -249,11 +268,9 @@ router.get('/analytics', async (req, res) => {
 });
 
 // ── BROADCAST ALERT ────────────────────────────────────────────────────────────
-router.post('/broadcast', async (req, res) => {
+router.post('/broadcast', validate(broadcastSchema), async (req, res) => {
   try {
     const { title, message, severity } = req.body;
-    if (!title || !message)
-      return res.status(400).json({ message: 'Title and message required' });
 
     await pool.query(
       `INSERT INTO notifications (title, message, severity, type, created_at)

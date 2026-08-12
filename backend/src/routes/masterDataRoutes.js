@@ -1,8 +1,27 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
+const { z } = require('zod');
 
 const router = express.Router();
+
+// ── Validation middleware ─────────────────────────────────────────────────────
+function validate(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.issues[0].message });
+    }
+    req.body = result.data;
+    next();
+  };
+}
+
+// icon is an emoji field — max 20 chars covers multi-codepoint ZWJ sequences.
+const categorySchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
+  icon: z.string().max(20, 'Icon must be 20 characters or less').optional(),
+});
 
 // ── Public read endpoints ──────────────────────────────────────────────────────
 
@@ -41,10 +60,9 @@ router.get('/statuses', async (req, res) => {
 
 // ── Admin-only write endpoints ─────────────────────────────────────────────────
 
-router.post('/categories', verifyToken, requireAdmin, async (req, res) => {
+router.post('/categories', verifyToken, requireAdmin, validate(categorySchema), async (req, res) => {
   try {
     const { name, icon } = req.body;
-    if (!name) return res.status(400).json({ message: 'name is required' });
     const result = await pool.query(
       'INSERT INTO hazard_categories (name, icon) VALUES ($1, $2) RETURNING *',
       [name.trim(), icon?.trim() || null]
