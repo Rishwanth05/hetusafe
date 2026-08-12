@@ -7,8 +7,60 @@ const redis = require("../config/redis");
 const { getCache, setCache } = require("../config/redis");
 const { verifyToken } = require('../middleware/auth');
 const sharp = require('sharp');
+const { z } = require('zod');
 
 const router = express.Router();
+
+// ── Validation middleware (same pattern as authRoutes.js) ─────────────────────
+function validate(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.issues[0].message });
+    }
+    req.body = result.data;
+    next();
+  };
+}
+
+// Shared coordinate fields. /create sends multipart (lat/lng arrive as strings),
+// so z.coerce.number() is used for both routes for consistency.
+const latField = z.coerce
+  .number({ message: 'Latitude must be a number' })
+  .min(-90, 'Latitude must be between -90 and 90')
+  .max(90, 'Latitude must be between -90 and 90');
+const lngField = z.coerce
+  .number({ message: 'Longitude must be a number' })
+  .min(-180, 'Longitude must be between -180 and 180')
+  .max(180, 'Longitude must be between -180 and 180');
+
+// hazard_type is validated as a bounded string, not a static enum, because
+// categories are stored in the DB and can be extended by admins at runtime.
+const hazardTypeField = z
+  .string()
+  .min(1, 'Hazard type is required')
+  .max(100, 'Hazard type must be 100 characters or less');
+
+// user_id is deliberately absent — the handler now reads req.user.id from the
+// verified JWT instead. Zod strips any client-supplied user_id from req.body.
+const createReportSchema = z.object({
+  hazard_type: hazardTypeField,
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  description: z
+    .string()
+    .min(1, 'Description is required')
+    .max(1000, 'Description must be 1000 characters or less'),
+  latitude: latField,
+  longitude: lngField,
+  custom_description: z.string().max(100).optional(),
+  location_method: z.string().max(20).optional(),
+});
+
+const checkDuplicateSchema = z.object({
+  latitude: latField,
+  longitude: lngField,
+  hazard_type: hazardTypeField,
+});
 
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3')
 
@@ -161,17 +213,15 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
     }
     next()
   })
-}, async (req, res) => {
+}, validate(createReportSchema), async (req, res) => {
   try {
     const {
-      user_id, hazard_type, severity, description,
+      hazard_type, severity, description,
       custom_description, latitude, longitude, location_method,
     } = req.body;
 
-    if (!user_id || !hazard_type || !severity || !description ||
-        latitude == null || longitude == null) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
+    // user_id now comes from the verified JWT, not the request body.
+    const userId = req.user.id;
 
     if (hazard_type === 'Others' && !custom_description?.trim()) {
       return res.status(400).json({ message: "Please describe the hazard type" });
@@ -195,7 +245,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
         (user_id, hazard_type, severity, description, custom_description, latitude, longitude, location_method, image_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [user_id, clean_hazard_type, severity, clean_description, clean_custom_description,
+      [userId, clean_hazard_type, severity, clean_description, clean_custom_description,
        latitude, longitude, location_method || "gps", image_url]
     );
 
@@ -204,12 +254,12 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
     try { await redis.del('reports:all'); } catch {}
 
     // TRUST-1 — +10 points for submitting a report
-    await updateTrustScore(pool, user_id, 10)
+    await updateTrustScore(pool, userId, 10)
 
     // Update reporter's last known location so future FCM broadcasts can radius-filter them
     await pool.query(
       `UPDATE users SET last_lat = $1, last_lng = $2 WHERE id = $3`,
-      [latitude, longitude, user_id]
+      [latitude, longitude, userId]
     );
 
     const io = req.app.get('io')
@@ -245,7 +295,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
                cos(radians(last_lng) - radians($2)) +
                sin(radians($1)) * sin(radians(last_lat))
              ))) <= 30`,
-      [latitude, longitude, user_id]
+      [latitude, longitude, userId]
     )
       .then(({ rows }) => {
         if (rows.length === 0) return;
@@ -322,11 +372,9 @@ router.post("/resolve", (req, res, next) => {
 });
 
 // DUP1 — Duplicate detection: check 50m radius + same category + 24hr window
-router.post("/check-duplicate", async (req, res) => {
+router.post("/check-duplicate", validate(checkDuplicateSchema), async (req, res) => {
   try {
     const { latitude, longitude, hazard_type } = req.body
-    if (!latitude || !longitude || !hazard_type)
-      return res.status(400).json({ message: 'Missing fields' })
 
     const result = await pool.query(
       `SELECT id, hazard_type, description, created_at, distance_meters
