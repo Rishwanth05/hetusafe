@@ -8,8 +8,68 @@ const { generateOTP, sendOTPEmail } = require('../utils/email');
 const { verifyToken } = require('../middleware/auth');
 const redis = require('../config/redis');
 const rateLimit = require('express-rate-limit');
+const { z } = require('zod');
 
 const router = express.Router();
+
+// ── Validation middleware ─────────────────────────────────────────────────────
+function validate(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.issues[0].message });
+    }
+    req.body = result.data;
+    next();
+  };
+}
+
+// Reused field schemas
+const emailField = z.string().trim().email('Invalid email address');
+const passwordField = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
+  .regex(/[0-9]/, 'Password must contain at least one number');
+
+const signupSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
+  email: emailField,
+  password: passwordField,
+});
+const verifyEmailSchema = z.object({
+  email: emailField,
+  otp: z.string().regex(/^\d{6}$/, 'OTP must be a 6-digit code'),
+});
+const loginSchema = z.object({
+  email: emailField,
+  password: z.string().min(1, 'Password is required'),
+});
+const verifyLoginSchema = z.object({
+  email: emailField,
+  otp: z.string().regex(/^\d{6}$/, 'OTP must be a 6-digit code'),
+});
+const resendOtpSchema = z.object({
+  email: emailField,
+  purpose: z.enum(['verify', 'login']),
+});
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  new_password: passwordField,
+});
+const changePasswordSchema = z.object({
+  old_password: z.string().min(1, 'Current password is required'),
+  new_password: passwordField,
+});
+const emergencyContactItemSchema = z.object({
+  name: z.string().min(1, 'Contact name is required').max(100, 'Name must be 100 characters or less'),
+  phone: z.string().min(1, 'Phone number is required').max(30, 'Phone number too long'),
+  relation: z.string().max(100, 'Relation must be 100 characters or less').optional(),
+  id: z.number().or(z.string()).optional(),
+});
+const emergencyContactsSchema = z.object({
+  contacts: z.array(emergencyContactItemSchema).max(10, 'Maximum 10 emergency contacts allowed'),
+});
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -40,13 +100,10 @@ async function issueTokens(user) {
 }
 
 // ── SIGNUP (step 1) ────────────────────────────────────────────────────────────
-router.post('/signup', async (req, res) => {
+router.post('/signup', validate(signupSchema), async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ message: 'All fields required' });
-
-    const clean_name = xss(name.trim());
+    const clean_name = xss(name);
 
     const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (exists.rows.length > 0)
@@ -81,11 +138,9 @@ router.post('/signup', async (req, res) => {
 });
 
 // ── VERIFY EMAIL OTP ───────────────────────────────────────────────────────────
-router.post('/verify-email', async (req, res) => {
+router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp)
-      return res.status(400).json({ message: 'Email and OTP required' });
 
     const result = await pool.query(
       `SELECT * FROM otp_codes WHERE email = $1 AND purpose = 'verify'`,
@@ -141,11 +196,9 @@ router.post('/verify-email', async (req, res) => {
 });
 
 // ── LOGIN (step 1) ─────────────────────────────────────────────────────────────
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ message: 'All fields required' });
 
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0)
@@ -212,11 +265,9 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // ── VERIFY LOGIN OTP ───────────────────────────────────────────────────────────
-router.post('/verify-login', async (req, res) => {
+router.post('/verify-login', validate(verifyLoginSchema), async (req, res) => {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp)
-      return res.status(400).json({ message: 'Email and OTP required' });
 
     const result = await pool.query(
       `SELECT * FROM otp_codes WHERE email = $1 AND purpose = 'login'`,
@@ -331,11 +382,9 @@ router.post('/logout', verifyToken, async (req, res) => {
 });
 
 // ── RESEND OTP ─────────────────────────────────────────────────────────────────
-router.post('/resend-otp', otpLimiter, async (req, res) => {
+router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), async (req, res) => {
   try {
     const { email, purpose } = req.body;
-    if (!email || !purpose)
-      return res.status(400).json({ message: 'Email and purpose required' });
 
     const otp = generateOTP();
     const expires_at = new Date(Date.now() + 10 * 60 * 1000);
@@ -414,13 +463,9 @@ router.put('/update-name', verifyToken, async (req, res) => {
 });
 
 // ── CHANGE PASSWORD ────────────────────────────────────────────────────────────
-router.put('/change-password', verifyToken, async (req, res) => {
+router.put('/change-password', verifyToken, validate(changePasswordSchema), async (req, res) => {
   try {
     const { old_password, new_password } = req.body;
-    if (!old_password || !new_password)
-      return res.status(400).json({ message: 'Both fields required' });
-    if (new_password.length < 6)
-      return res.status(400).json({ message: 'New password must be at least 6 characters' });
 
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     const user = result.rows[0];
@@ -550,13 +595,9 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // ── RESET PASSWORD ─────────────────────────────────────────────────────────────
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', validate(resetPasswordSchema), async (req, res) => {
   try {
     const { token, new_password } = req.body;
-    if (!token || !new_password)
-      return res.status(400).json({ message: 'Token and new password required' });
-    if (new_password.length < 6)
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
 
     const result = await pool.query(
       `SELECT * FROM password_reset_tokens WHERE token = $1 AND used = false`,
@@ -614,12 +655,9 @@ router.get('/emergency-contacts', verifyToken, async (req, res) => {
 });
 
 // PUT /auth/emergency-contacts — save user's emergency contacts
-router.put('/emergency-contacts', verifyToken, async (req, res) => {
+router.put('/emergency-contacts', verifyToken, validate(emergencyContactsSchema), async (req, res) => {
   try {
     const { contacts } = req.body;
-    if (!Array.isArray(contacts)) {
-      return res.status(400).json({ error: 'contacts must be an array' });
-    }
     await pool.query(
       'UPDATE users SET emergency_contacts = $1 WHERE id = $2',
       [JSON.stringify(contacts), req.user.id]

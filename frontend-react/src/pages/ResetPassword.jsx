@@ -20,7 +20,9 @@ export default function ResetPassword() {
 
   const handleSubmit = async () => {
     if (!form.new_password || !form.confirm_password) { setError('Both fields required'); return }
-    if (form.new_password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (form.new_password.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (!/[a-zA-Z]/.test(form.new_password)) { setError('Password must contain at least one letter'); return }
+    if (!/[0-9]/.test(form.new_password)) { setError('Password must contain at least one number'); return }
     if (form.new_password !== form.confirm_password) { setError('Passwords do not match'); return }
     setLoading(true)
     setError('')
@@ -69,7 +71,7 @@ export default function ResetPassword() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>New Password</label>
                 <input
                   type="password"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters, include a letter and number"
                   value={form.new_password}
                   onChange={e => setForm(f => ({ ...f, new_password: e.target.value }))}
                   style={inputStyle}

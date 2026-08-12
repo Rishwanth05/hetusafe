@@ -24,7 +24,9 @@ export default function Signup() {
   const handleSignup = async (e) => {
     e.preventDefault()
     setError('')
-    if (form.password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (!/[a-zA-Z]/.test(form.password)) { setError('Password must contain at least one letter'); return }
+    if (!/[0-9]/.test(form.password)) { setError('Password must contain at least one number'); return }
     setLoading(true)
     try {
       await client.post('/auth/signup', form)
@@ -83,7 +85,7 @@ export default function Signup() {
                 value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               <input style={styles.input} type="email" placeholder="Email address"
                 value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
-              <input style={styles.input} type="password" placeholder="Password (min 6 chars)"
+              <input style={styles.input} type="password" placeholder="Password (min 8 chars, include a letter and number)"
                 value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
               {error && <p style={styles.error}>{error}</p>}
               <button style={styles.btn} type="submit" disabled={loading}>

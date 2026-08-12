@@ -79,7 +79,9 @@ export default function Profile() {
     setPwError(''); setPwMsg('')
     if (!pwForm.old_password || !pwForm.new_password || !pwForm.confirm) { setPwError('All fields are required'); return }
     if (pwForm.new_password !== pwForm.confirm) { setPwError('New passwords do not match'); return }
-    if (pwForm.new_password.length < 6) { setPwError('Password must be at least 6 characters'); return }
+    if (pwForm.new_password.length < 8) { setPwError('Password must be at least 8 characters'); return }
+    if (!/[a-zA-Z]/.test(pwForm.new_password)) { setPwError('Password must contain at least one letter'); return }
+    if (!/[0-9]/.test(pwForm.new_password)) { setPwError('Password must contain at least one number'); return }
     setPwLoading(true)
     try {
       await client.put('/auth/change-password', { old_password: pwForm.old_password, new_password: pwForm.new_password })
@@ -349,11 +351,11 @@ export default function Profile() {
         {activeTab === 'security' && (
           <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>Change Password</h2>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>Make sure your new password is at least 6 characters</p>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>Make sure your new password is at least 8 characters and includes a letter and a number</p>
 
             {[
               { label: 'Current Password', key: 'old_password', placeholder: '••••••••' },
-              { label: 'New Password', key: 'new_password', placeholder: 'Min 6 characters' },
+              { label: 'New Password', key: 'new_password', placeholder: 'Min 8 chars, include a letter and number' },
               { label: 'Confirm New Password', key: 'confirm', placeholder: 'Repeat new password' },
             ].map(f => (
               <div key={f.key} style={{ marginBottom: '16px' }}>
