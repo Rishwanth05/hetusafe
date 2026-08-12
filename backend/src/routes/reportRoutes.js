@@ -1,17 +1,16 @@
 const express = require("express");
 const pool = require("../db");
 const multer = require("multer");
-const path = require("path");
 const xss = require("xss");
 const { sendPushNotification } = require("../config/firebase");
 const redis = require("../config/redis");
 const { getCache, setCache } = require("../config/redis");
 const { verifyToken } = require('../middleware/auth');
+const sharp = require('sharp');
 
 const router = express.Router();
 
-const { S3Client } = require('@aws-sdk/client-s3')
-const multerS3 = require('multer-s3')
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3')
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
@@ -21,28 +20,50 @@ const s3 = new S3Client({
   }
 })
 
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true)
-  } else {
-    cb(new Error('Only JPEG, PNG and WebP images are allowed'), false)
-  }
-}
+// Allowlist checked against magic bytes, not the client-supplied Content-Type header.
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
+// Buffer in memory so we can inspect bytes before anything reaches S3.
 const upload = multer({
-  fileFilter,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
-  storage: multerS3({
-    s3,
-    bucket: process.env.S3_BUCKET_NAME,
-    contentType: multerS3.AUTO_CONTENT_TYPE,
-    key: (req, file, cb) => {
-      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`
-      cb(null, `uploads/${uniqueName}`)
-    }
-  })
 })
+
+// Verifies real file type from magic bytes, re-encodes to WebP via sharp
+// (strips EXIF/GPS metadata and embedded payloads), then uploads to S3.
+// Throws with err.status = 400 on invalid type; propagates S3/sharp errors otherwise.
+async function processAndUploadImage(buffer) {
+  // file-type is ESM-only; dynamic import works from CJS on Node 18+.
+  const ftModule = await import('file-type')
+  console.log('[upload-debug] file-type module keys:', Object.keys(ftModule))
+  const { fileTypeFromBuffer } = ftModule
+  console.log('[upload-debug] fileTypeFromBuffer type:', typeof fileTypeFromBuffer)
+  console.log('[upload-debug] buffer length:', buffer?.length, 'first 8 bytes:', buffer?.slice(0, 8).toString('hex'))
+  const detected = await fileTypeFromBuffer(buffer)
+  console.log('[upload-debug] detected:', detected)
+
+  if (!detected || !ALLOWED_IMAGE_MIME_TYPES.has(detected.mime)) {
+    console.log('[upload-debug] REJECTED — not in allowlist. detected:', detected)
+    const err = new Error('Only JPEG, PNG and WebP images are allowed')
+    err.status = 400
+    throw err
+  }
+  console.log('[upload-debug] ACCEPTED — mime:', detected.mime, 'ext:', detected.ext)
+
+  // Re-encode to WebP — strips all metadata and normalises output format.
+  // quality: 80 matches typical JPEG defaults while producing smaller files.
+  const safeBuffer = await sharp(buffer).webp({ quality: 80 }).toBuffer()
+
+  const key = `uploads/${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`
+  await s3.send(new PutObjectCommand({
+    Bucket: process.env.S3_BUCKET_NAME,
+    Key: key,
+    Body: safeBuffer,
+    ContentType: 'image/webp',
+  }))
+
+  return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
+}
 
 // TRUST-1 — Recalculate trust score and badge tier
 async function updateTrustScore(pool, userId, delta) {
@@ -132,8 +153,11 @@ router.get('/trust/:userId', async (req, res) => {
 router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
   upload.single('image')(req, res, (err) => {
     if (err) {
-      console.error('Multer/S3 upload error:', err)
-      return res.status(500).json({ error: err.message })
+      console.error('Multer error:', err)
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Please upload a photo below 5MB.' })
+      }
+      return res.status(400).json({ error: err.message })
     }
     next()
   })
@@ -157,7 +181,14 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
     const clean_description = xss(description.trim());
     const clean_custom_description = custom_description ? xss(custom_description.trim()) : null;
 
-    const image_url = req.file ? req.file.location : null;
+    let image_url = null
+    if (req.file) {
+      try {
+        image_url = await processAndUploadImage(req.file.buffer)
+      } catch (err) {
+        return res.status(err.status || 400).json({ error: err.message })
+      }
+    }
 
     const result = await pool.query(
       `INSERT INTO reports
@@ -240,7 +271,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
 router.post("/resolve", (req, res, next) => {
   upload.single('proof')(req, res, (err) => {
     if (err) {
-      console.error('Multer/S3 upload error (resolve):', err)
+      console.error('Multer error (resolve):', err)
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ error: 'Please upload a photo below 5MB.' })
       }
@@ -258,7 +289,12 @@ router.post("/resolve", (req, res, next) => {
     if (!req.file)
       return res.status(400).json({ message: "Camera proof image is required to resolve a report" });
 
-    const proof_url = req.file.location;
+    let proof_url
+    try {
+      proof_url = await processAndUploadImage(req.file.buffer)
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message })
+    }
 
     await pool.query(
       `UPDATE reports SET status = 'resolved', resolved_at = NOW() WHERE id = $1`,
