@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const Sentry = require('@sentry/node');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const csrf = require('csurf');
+const { doubleCsrf } = require('csrf-csrf');
 const rateLimit = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const redis = require('./config/redis');
@@ -71,13 +71,17 @@ const authLimiter = rateLimit({
   store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
 });
 
-// SEC4 — CSRF protection on all state-changing routes
-const csrfProtection = csrf({
-  cookie: {
+// SEC4 — CSRF protection on all state-changing routes (csrf-csrf double-submit cookie)
+const { generateToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET,
+  cookieName: '_csrf',
+  cookieOptions: {
     httpOnly: true,
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
     secure: process.env.NODE_ENV === 'production',
-  }
+    path: '/',
+  },
+  getTokenFromRequest: (req) => req.headers['x-csrf-token'],
 });
 
 const swaggerSpec = swaggerJsdoc({
@@ -95,17 +99,17 @@ if (process.env.NODE_ENV !== 'production') {
 app.get('/', (req, res) => res.json({ message: 'Project SAVE backend ✅' }));
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
-// SEC4 — expose CSRF token to frontend
-app.get('/api/csrf-token', csrfProtection, (req, res) => {
-  res.json({ csrfToken: req.csrfToken() });
+// SEC4 — expose CSRF token to frontend (generateToken sets cookie + returns token)
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: generateToken(req, res) });
 });
 
-app.use('/api/v1/auth', authLimiter, csrfProtection, authRoutes);
-app.use('/api/v1/reports', csrfProtection, reportRoutes);
-app.use('/api/v1/contact', csrfProtection, contactRoutes);
-app.use('/api/v1/badges', csrfProtection, badgeRoutes);
-app.use('/api/v1/admin', csrfProtection, adminRoutes);
-app.use('/api/v1/notifications', csrfProtection, notificationRoutes);
+app.use('/api/v1/auth', authLimiter, doubleCsrfProtection, authRoutes);
+app.use('/api/v1/reports', doubleCsrfProtection, reportRoutes);
+app.use('/api/v1/contact', doubleCsrfProtection, contactRoutes);
+app.use('/api/v1/badges', doubleCsrfProtection, badgeRoutes);
+app.use('/api/v1/admin', doubleCsrfProtection, adminRoutes);
+app.use('/api/v1/notifications', doubleCsrfProtection, notificationRoutes);
 // LAND-2 — Public stats, no CSRF/auth needed (must be before 404 handler)
 app.use('/api/v1/public', publicRoutes);
 // DB4 — Master data (GET public, POST/PATCH admin-only via route-level auth)
