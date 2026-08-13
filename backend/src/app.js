@@ -74,6 +74,7 @@ const authLimiter = rateLimit({
 // SEC4 — CSRF protection on all state-changing routes (csrf-csrf double-submit cookie)
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET,
+  getSessionIdentifier: () => '',
   cookieName: '_csrf',
   cookieOptions: {
     httpOnly: true,
