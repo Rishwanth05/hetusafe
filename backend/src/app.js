@@ -72,7 +72,7 @@ const authLimiter = rateLimit({
 });
 
 // SEC4 — CSRF protection on all state-changing routes (csrf-csrf double-submit cookie)
-const { generateToken, doubleCsrfProtection } = doubleCsrf({
+const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET,
   cookieName: '_csrf',
   cookieOptions: {
@@ -99,9 +99,9 @@ if (process.env.NODE_ENV !== 'production') {
 app.get('/', (req, res) => res.json({ message: 'Project SAVE backend ✅' }));
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
-// SEC4 — expose CSRF token to frontend (generateToken sets cookie + returns token)
+// SEC4 — expose CSRF token to frontend (generateCsrfToken sets cookie + returns token)
 app.get('/api/csrf-token', (req, res) => {
-  res.json({ csrfToken: generateToken(req, res) });
+  res.json({ csrfToken: generateCsrfToken(req, res) });
 });
 
 app.use('/api/v1/auth', authLimiter, doubleCsrfProtection, authRoutes);
