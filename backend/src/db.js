@@ -12,7 +12,7 @@ function getConnectionConfig() {
   const url = isProd ? process.env.DB_PROD_URL : process.env.DB_DEV_URL;
 
   if (url) return { connectionString: url, ...POOL_TUNING };
-  if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL, ...POOL_TUNING };
+  if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, ...POOL_TUNING };
 
   return {
     host: process.env.DB_HOST,
