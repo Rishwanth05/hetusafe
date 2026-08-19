@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import client from '../api/client'
+import { Card, Button } from '../components/ui'
+
+const INPUT_CLS = 'w-full bg-elevated border border-edge rounded-xl px-4 py-3 text-body text-light placeholder:text-muted focus:outline-none focus:border-accent transition-colors'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
 
-  const [form, setForm] = useState({ new_password: '', confirm_password: '' })
+  /* ── All existing state (unchanged) ──────────────────────────────────── */
+  const [form, setForm]       = useState({ new_password: '', confirm_password: '' })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
 
+  /* ── All existing effects (unchanged) ────────────────────────────────── */
   useEffect(() => {
     if (!token) {
       setError('Invalid or missing reset token. Please request a new link.')
     }
   }, [token])
 
+  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleSubmit = async () => {
     if (!form.new_password || !form.confirm_password) { setError('Both fields required'); return }
     if (form.new_password.length < 8) { setError('Password must be at least 8 characters'); return }
@@ -36,80 +42,87 @@ export default function ResetPassword() {
     }
   }
 
-  const inputStyle = {
-    width: '100%', padding: '12px 16px',
-    border: '1.5px solid #e2e8f0', borderRadius: '10px',
-    fontSize: '15px', outline: 'none', boxSizing: 'border-box',
-  }
-
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-      <div style={{ width: '100%', maxWidth: '420px' }}>
+    <div className="min-h-screen bg-canvas flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-sm">
+        <Card className="p-8">
 
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ width: '56px', height: '56px', background: '#16a34a', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>🔑</div>
-          <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a', margin: '0 0 8px' }}>Reset Password</h1>
-          <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>Enter your new password below</p>
-        </div>
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 mb-7">
+            <svg width="32" height="32" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+              <rect width="56" height="56" rx="16" fill="#22C55E"/>
+              <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
+              <path d="M22 28L26 32L34 24" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="text-xl font-bold text-light tracking-tight">Project SAVE</span>
+          </div>
 
-        <div style={{ background: '#fff', borderRadius: '16px', padding: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          {/* ── Success state ─────────────────────────────────────────── */}
           {success ? (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Password Reset!</h2>
-              <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>Your password has been updated. Please log in with your new password.</p>
-              <button
-                onClick={() => navigate('/login')}
-                style={{ width: '100%', padding: '12px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}
-              >
+            <div className="text-center">
+              <div className="text-5xl mb-4" aria-hidden="true">✅</div>
+              <h1 className="text-section font-bold text-light mb-2">Password reset!</h1>
+              <p className="text-caption text-muted mb-6 leading-relaxed">
+                Your password has been updated. Please log in with your new password.
+              </p>
+              <Button variant="primary" className="w-full" onClick={() => navigate('/login')}>
                 Go to Login
-              </button>
+              </Button>
             </div>
           ) : (
+            /* ── Form state ───────────────────────────────────────────── */
             <>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>New Password</label>
-                <input
-                  type="password"
-                  placeholder="At least 8 characters, include a letter and number"
-                  value={form.new_password}
-                  onChange={e => setForm(f => ({ ...f, new_password: e.target.value }))}
-                  style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = '#16a34a'}
-                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-                />
-              </div>
+              <h1 className="text-section font-bold text-light mb-1">Reset password</h1>
+              <p className="text-caption text-muted mb-6">Enter your new password below</p>
 
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>Confirm New Password</label>
-                <input
-                  type="password"
-                  placeholder="Repeat your new password"
-                  value={form.confirm_password}
-                  onChange={e => setForm(f => ({ ...f, confirm_password: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                  style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = '#16a34a'}
-                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-                />
-              </div>
-
-              {error && (
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '14px', marginBottom: '16px' }}>
-                  {error}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-caption text-muted font-semibold mb-1.5">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="At least 8 characters, include a letter and number"
+                    value={form.new_password}
+                    onChange={e => setForm(f => ({ ...f, new_password: e.target.value }))}
+                    className={INPUT_CLS}
+                  />
                 </div>
-              )}
 
-              <button
-                onClick={handleSubmit}
-                disabled={loading || !token}
-                style={{ width: '100%', padding: '13px', background: loading ? '#86efac' : '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer' }}
-              >
-                {loading ? 'Resetting…' : 'Reset Password'}
-              </button>
+                <div>
+                  <label className="block text-caption text-muted font-semibold mb-1.5">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Repeat your new password"
+                    value={form.confirm_password}
+                    onChange={e => setForm(f => ({ ...f, confirm_password: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                    className={INPUT_CLS}
+                  />
+                </div>
+
+                {error && (
+                  <div className="bg-danger/10 border border-danger/30 rounded-xl px-4 py-3 text-caption text-danger">
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={handleSubmit}
+                  disabled={loading || !token}
+                >
+                  {loading ? 'Resetting…' : 'Reset Password'}
+                </Button>
+              </div>
             </>
           )}
-        </div>
+
+        </Card>
       </div>
     </div>
   )

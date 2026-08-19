@@ -1,19 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import client from '../api/client'
+import NotificationCenter from '../components/NotificationCenter'
+import { AppDrawer, BottomNav, Card, Button, PriorityBadge } from '../components/ui'
 
-const severityColor = {
-  low: { bg: '#dcfce7', text: '#16a34a' },
-  medium: { bg: '#fef9c3', text: '#ca8a04' },
-  high: { bg: '#fee2e2', text: '#dc2626' },
-  critical: { bg: '#f3e8ff', text: '#9333ea' },
+/* ── Shared dark input style (replaces old light inputStyle) ─────────────── */
+const INPUT_CLS = 'w-full bg-canvas border border-edge rounded-xl px-4 py-3 text-body text-light placeholder:text-muted focus:outline-none focus:border-accent transition-colors'
+
+const LABEL_CLS = 'block text-caption text-muted font-semibold mb-1.5 uppercase tracking-wider'
+
+/* ── Tier colours (for the trust-score pill) ────────────────────────────── */
+const TIER_COLOR = {
+  Hero:     { bg: 'bg-yellow-500/15  border-yellow-500/30  text-yellow-400'  },
+  Guardian: { bg: 'bg-accent/15      border-accent/30      text-accent'       },
+  Trusted:  { bg: 'bg-blue-500/15    border-blue-500/30    text-blue-400'     },
+  Reporter: { bg: 'bg-[#7c3aed]/15   border-[#7c3aed]/30   text-[#a78bfa]'   },
+  Newcomer: { bg: 'bg-elevated       border-edge           text-muted'        },
 }
 
 export default function Profile() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
 
+  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [profile, setProfile] = useState(null)
   const [myReports, setMyReports] = useState([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +51,13 @@ export default function Profile() {
   const [showAddContact, setShowAddContact] = useState(false)
   const [newContact, setNewContact] = useState({ name: '', phone: '', relation: '' })
 
+  /* ── Top-bar / drawer state ───────────────────────────────────────────── */
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const navMenuRef = useRef(null)
+  const drawerRef  = useRef(null)
+
+  /* ── All existing useEffects (unchanged) ─────────────────────────────── */
   useEffect(() => {
     client.get('/auth/emergency-contacts')
       .then(({ data }) => setContacts(data))
@@ -57,10 +74,29 @@ export default function Profile() {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = (e) => {
+      if (!navMenuRef.current?.contains(e.target) && !drawerRef.current?.contains(e.target))
+        setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menuOpen])
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try { setUnreadCount((await client.get('/notifications/unread-count')).data.count) } catch {}
+    }
+    fetchUnread()
+    const id = setInterval(fetchUnread, 20000)
+    return () => clearInterval(id)
+  }, [])
+
+  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleUpdateName = async () => {
     if (!newName.trim()) return
-    setNameLoading(true)
-    setNameMsg('')
+    setNameLoading(true); setNameMsg('')
     try {
       const { data } = await client.put('/auth/update-name', { name: newName })
       const token = localStorage.getItem('token')
@@ -134,263 +170,395 @@ export default function Profile() {
     client.put('/auth/emergency-contacts', { contacts: updated }).catch(() => {})
   }
 
-  const initials = (profile?.name || user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-  const totalReports = myReports.length
+  /* ── Derived values (unchanged) ─────────────────────────────────────── */
+  const initials       = (profile?.name || user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+  const totalReports   = myReports.length
   const resolvedReports = myReports.filter(r => r.status === 'resolved').length
-  const activeReports = myReports.filter(r => r.status !== 'resolved').length
+  const activeReports  = myReports.filter(r => r.status !== 'resolved').length
+  const tierCls        = TIER_COLOR[profile?.badge_tier] || TIER_COLOR.Newcomer
 
-  const inputStyle = {
-    width: '100%', padding: '11px 14px',
-    border: '1.5px solid #e2e8f0', borderRadius: '10px',
-    fontSize: '14px', outline: 'none', fontFamily: 'inherit',
-    transition: 'border-color 0.2s',
-  }
-
-  const tabs = [
-    { id: 'overview', label: '👤 Overview' },
-    { id: 'reports', label: '📋 My Reports' },
-    { id: 'security', label: '🔒 Security' },
-    { id: 'emergency', label: '🚨 Emergency Contacts' },
-  ]
-
+  /* ── Loading state ───────────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-        <p style={{ color: '#64748b' }}>Loading profile…</p>
+      <div className="min-h-screen bg-canvas flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-edge border-t-accent rounded-full animate-spin" />
+          <p className="text-body text-muted">Loading profile…</p>
+        </div>
       </div>
     )
   }
 
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div className="min-h-screen bg-canvas">
 
-      <nav style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 32px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <svg width="32" height="32" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="16" fill="#16a34a"/>
-            <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
-            <path d="M22 28L26 32L34 24" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span style={{ fontWeight: '700', fontSize: '18px', color: '#0f172a' }}>Project SAVE</span>
-        </div>
-        <button onClick={() => navigate('/dashboard')} style={{ background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', cursor: 'pointer' }}>
-          ← Back to Dashboard
-        </button>
-      </nav>
+      {/* ── Top bar ───────────────────────────────────────────────────── */}
+      <header
+        ref={navMenuRef}
+        className="sticky top-0 z-40 bg-canvas/90 backdrop-blur-xl border-b border-edge"
+      >
+        <div className="flex items-center justify-between h-14 px-4 max-w-3xl mx-auto">
 
-      <div style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', padding: '40px 24px 80px', color: '#fff' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '24px' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: '800', color: '#fff', flexShrink: 0 }}>
-            {initials}
+          {/* Hamburger */}
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-muted hover:text-light hover:bg-elevated transition-colors shrink-0"
+          >
+            {menuOpen
+              ? <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              : <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            }
+          </button>
+
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <svg width="26" height="26" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+              <rect width="56" height="56" rx="16" fill="#22C55E"/>
+              <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
+              <path d="M22 28L26 32L34 24" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="text-[17px] font-bold text-light tracking-tight">My Profile</span>
           </div>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>{profile?.name}</h1>
-            <p style={{ opacity: 0.85, fontSize: '15px' }}>{profile?.email}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-              <p style={{ opacity: 0.7, fontSize: '13px' }}>
-                Member since {new Date(profile?.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </p>
-              {profile?.badge_tier && (
-                <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '2px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
-                  ⭐ {profile.badge_tier}
+
+          {/* Notification bell */}
+          <NotificationCenter externalCount={unreadCount} />
+        </div>
+      </header>
+
+      {/* ── App drawer ────────────────────────────────────────────────── */}
+      <AppDrawer open={menuOpen} onClose={() => setMenuOpen(false)} drawerRef={drawerRef} />
+
+      {/* ── Main content ──────────────────────────────────────────────── */}
+      <main className="max-w-3xl mx-auto px-4 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+
+        {/* ── Profile hero card ─────────────────────────────────────── */}
+        <Card className="mt-6 mb-4 p-5">
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <div className="w-16 h-16 rounded-2xl bg-accent/15 border-2 border-accent/40 flex items-center justify-center text-2xl font-bold text-accent shrink-0 select-none">
+              {initials}
+            </div>
+            {/* Info */}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-section font-bold text-light truncate">{profile?.name}</h1>
+              <p className="text-caption text-muted truncate mt-0.5">{profile?.email}</p>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="text-caption text-muted">
+                  Member since {new Date(profile?.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </span>
-              )}
+                {profile?.badge_tier && (
+                  <span className={`text-caption font-semibold border px-2 py-0.5 rounded-full whitespace-nowrap ${tierCls.bg}`}>
+                    ⭐ {profile.badge_tier}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </Card>
 
-      {/* Stats strip — TRUST-1 adds 4th card */}
-      <div style={{ maxWidth: '900px', margin: '-40px auto 0', padding: '0 24px', position: 'relative', zIndex: 10 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+        {/* ── Stats grid ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {[
-            { label: 'Total Reports', value: totalReports, color: '#0f172a', icon: '📋' },
-            { label: 'Resolved', value: resolvedReports, color: '#16a34a', icon: '✅' },
-            { label: 'Active', value: activeReports, color: '#dc2626', icon: '🔴' },
-            { label: 'Trust Score', value: profile?.trust_score || 100, color: '#7c3aed', icon: '⭐' },
-          ].map(({ label, value, color, icon }) => (
-            <div key={label} style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', marginBottom: '6px' }}>{icon}</div>
-              <p style={{ fontSize: '28px', fontWeight: '800', color }}>{value}</p>
-              <p style={{ color: '#64748b', fontSize: '13px', marginTop: '2px' }}>{label}</p>
-            </div>
+            { label: 'Total Reports', value: totalReports,    icon: '📋', cls: 'text-light'      },
+            { label: 'Resolved',      value: resolvedReports, icon: '✅', cls: 'text-accent'     },
+            { label: 'Active',        value: activeReports,   icon: '🔴', cls: 'text-danger'     },
+            { label: 'Trust Score',   value: profile?.trust_score || 100, icon: '⭐', cls: 'text-[#a78bfa]' },
+          ].map(({ label, value, icon, cls }) => (
+            <Card key={label} className="p-4 text-center">
+              <div className="text-2xl mb-1" aria-hidden="true">{icon}</div>
+              <p className={`text-2xl font-bold ${cls}`}>{value}</p>
+              <p className="text-caption text-muted mt-0.5">{label}</p>
+            </Card>
           ))}
         </div>
-      </div>
 
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
-
-        <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', borderRadius: '12px', padding: '4px', marginBottom: '24px' }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ flex: 1, padding: '10px 8px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: activeTab === t.id ? '#fff' : 'transparent', color: activeTab === t.id ? '#0f172a' : '#64748b', boxShadow: activeTab === t.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+        {/* ── Tab bar ───────────────────────────────────────────────── */}
+        <div className="flex gap-1 bg-surface border border-edge rounded-2xl p-1 mb-5 overflow-x-auto">
+          {[
+            { id: 'overview',  label: '👤 Overview'  },
+            { id: 'reports',   label: '📋 Reports'   },
+            { id: 'security',  label: '🔒 Security'  },
+            { id: 'emergency', label: '🚨 Emergency' },
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex-1 min-w-[72px] py-2 px-3 rounded-xl text-caption font-semibold transition-all whitespace-nowrap focus:outline-none ${
+                activeTab === t.id
+                  ? 'bg-elevated text-light shadow-sm'
+                  : 'text-muted hover:text-light'
+              }`}
+            >
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* Overview Tab */}
+        {/* ═══════════════════════════════════════════════════════════
+            OVERVIEW TAB
+        ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'overview' && (
-          <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '20px' }}>Profile Information</h2>
+          <Card className="p-5 space-y-5">
+            <h2 className="text-section font-bold text-light">Profile Information</h2>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Display Name</label>
+            {/* Display Name */}
+            <div>
+              <label className={LABEL_CLS}>Display Name</label>
               {editingName ? (
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input type="text" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, flex: 1 }} onFocus={e => e.target.style.borderColor = '#16a34a'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} autoFocus />
-                  <button onClick={handleUpdateName} disabled={nameLoading} style={{ padding: '11px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>{nameLoading ? 'Saving…' : 'Save'}</button>
-                  <button onClick={() => { setEditingName(false); setNewName(profile?.name) }} style={{ padding: '11px 16px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleUpdateName()}
+                    className={`${INPUT_CLS} flex-1`}
+                    autoFocus
+                  />
+                  <Button variant="primary" size="sm" onClick={handleUpdateName} disabled={nameLoading}>
+                    {nameLoading ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => { setEditingName(false); setNewName(profile?.name) }}>
+                    Cancel
+                  </Button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '15px', color: '#0f172a', fontWeight: '500' }}>{profile?.name}</span>
-                  <button onClick={() => setEditingName(true)} style={{ background: 'transparent', border: 'none', color: '#16a34a', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Edit ✏️</button>
+                <div className="flex items-center justify-between bg-elevated border border-edge rounded-xl px-4 py-3">
+                  <span className="text-body text-light font-medium">{profile?.name}</span>
+                  <button
+                    onClick={() => setEditingName(true)}
+                    className="text-caption text-accent font-semibold hover:underline focus:outline-none"
+                  >
+                    Edit ✏️
+                  </button>
                 </div>
               )}
-              {nameMsg && <p style={{ fontSize: '13px', marginTop: '6px', color: nameMsg.startsWith('✅') ? '#16a34a' : '#dc2626' }}>{nameMsg}</p>}
+              {nameMsg && (
+                <p className={`text-caption mt-1.5 ${nameMsg.startsWith('✅') ? 'text-accent' : 'text-danger'}`}>
+                  {nameMsg}
+                </p>
+              )}
             </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
-              <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '15px', color: '#0f172a' }}>{profile?.email}</span>
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Cannot be changed</span>
+            {/* Email */}
+            <div>
+              <label className={LABEL_CLS}>Email Address</label>
+              <div className="flex items-center justify-between bg-elevated border border-edge rounded-xl px-4 py-3">
+                <span className="text-body text-light">{profile?.email}</span>
+                <span className="text-caption text-muted">Cannot be changed</span>
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Role</label>
-              <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                <span style={{ background: '#dcfce7', color: '#16a34a', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', textTransform: 'capitalize' }}>{profile?.role || 'user'}</span>
+            {/* Role */}
+            <div>
+              <label className={LABEL_CLS}>Account Role</label>
+              <div className="bg-elevated border border-edge rounded-xl px-4 py-3">
+                <span className="text-caption font-semibold text-accent bg-accent/10 border border-accent/20 px-2.5 py-0.5 rounded-full capitalize">
+                  {profile?.role || 'user'}
+                </span>
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Member Since</label>
-              <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                <span style={{ fontSize: '15px', color: '#0f172a' }}>
+            {/* Member Since */}
+            <div>
+              <label className={LABEL_CLS}>Member Since</label>
+              <div className="bg-elevated border border-edge rounded-xl px-4 py-3">
+                <span className="text-body text-light">
                   {new Date(profile?.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </span>
               </div>
             </div>
 
-            {/* TRUST-1 — Trust score + badge tier */}
+            {/* Trust Score */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trust Score & Badge</label>
-              <div style={{ padding: '16px', background: '#faf5ff', borderRadius: '10px', border: '1px solid #e9d5ff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span style={{ background: '#7c3aed', color: '#fff', padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
+              <label className={LABEL_CLS}>Trust Score &amp; Badge</label>
+              <div className="bg-[#7c3aed]/10 border border-[#7c3aed]/20 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-body font-bold text-[#a78bfa] bg-[#7c3aed]/20 border border-[#7c3aed]/30 px-3 py-1 rounded-full">
                     {profile?.badge_tier || 'Newcomer'}
                   </span>
-                  <span style={{ fontSize: '20px', fontWeight: '800', color: '#7c3aed' }}>
+                  <span className="text-xl font-bold text-[#a78bfa]">
                     {profile?.trust_score || 100} pts
                   </span>
                 </div>
-                <div style={{ height: '8px', background: '#e9d5ff', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${Math.min((profile?.trust_score || 100) / 10, 100)}%`, background: '#7c3aed', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                <div className="h-2 bg-[#7c3aed]/20 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#7c3aed] rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min((profile?.trust_score || 100) / 10, 100)}%` }}
+                  />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                <div className="flex justify-between mt-2">
                   {['Newcomer', 'Reporter', 'Trusted', 'Guardian', 'Hero'].map(t => (
-                    <span key={t} style={{ fontSize: '10px', color: profile?.badge_tier === t ? '#7c3aed' : '#94a3b8', fontWeight: profile?.badge_tier === t ? '700' : '400' }}>{t}</span>
+                    <span
+                      key={t}
+                      className={`text-[10px] ${profile?.badge_tier === t ? 'text-[#a78bfa] font-bold' : 'text-muted'}`}
+                    >
+                      {t}
+                    </span>
                   ))}
                 </div>
-                <p style={{ color: '#94a3b8', fontSize: '11px', marginTop: '10px' }}>
-                  +10 pts per report · +25 pts per resolution · -20 pts if rejected
+                <p className="text-caption text-muted mt-2.5">
+                  +10 pts per report · +25 pts per resolution · −20 pts if rejected
                 </p>
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* My Reports Tab */}
+        {/* ═══════════════════════════════════════════════════════════
+            MY REPORTS TAB
+        ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'reports' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>My Reports ({myReports.length})</h2>
-              <button onClick={() => navigate('/report')} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>+ New Report</button>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-section font-bold text-light">My Reports ({myReports.length})</h2>
+              <Button variant="primary" size="sm" onClick={() => navigate('/report')}>+ New Report</Button>
             </div>
 
             {myReports.length === 0 ? (
-              <div style={{ background: '#fff', borderRadius: '16px', padding: '48px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-                <p style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a' }}>No reports yet</p>
-                <p style={{ color: '#64748b', fontSize: '14px', marginTop: '8px', marginBottom: '20px' }}>Start contributing to community safety</p>
-                <button onClick={() => navigate('/report')} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Report First Hazard</button>
-              </div>
+              <Card className="p-12 text-center">
+                <div className="text-5xl mb-4" aria-hidden="true">📋</div>
+                <p className="text-section font-semibold text-light mb-2">No reports yet</p>
+                <p className="text-body text-muted mb-6">Start contributing to community safety</p>
+                <Button variant="primary" onClick={() => navigate('/report')}>Report First Hazard</Button>
+              </Card>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {myReports.map(r => {
-                  const s = severityColor[r.severity] || severityColor.low
-                  const isResolved = r.status === 'resolved'
-                  return (
-                    <div key={r.id} style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: isResolved ? '1px solid #bbf7d0' : '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              myReports.map(r => {
+                const isResolved = r.status === 'resolved'
+                return (
+                  <Card
+                    key={r.id}
+                    className={isResolved ? 'border-accent/30' : ''}
+                  >
+                    <div className="flex items-center gap-4 p-4">
+                      {/* Thumbnail */}
                       {r.image_url
-                        ? <img src={r.image_url} alt="hazard" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '10px', flexShrink: 0 }} />
-                        : <div style={{ width: '60px', height: '60px', background: '#f1f5f9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>🚧</div>}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <strong style={{ fontSize: '15px', color: '#0f172a' }}>{r.hazard_type}</strong>
-                          <span style={{ background: s.bg, color: s.text, padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', textTransform: 'capitalize' }}>{r.severity}</span>
-                          {isResolved && <span style={{ background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>✅ Resolved</span>}
+                        ? <img
+                            src={r.image_url}
+                            alt="hazard"
+                            className="w-14 h-14 object-cover rounded-xl shrink-0"
+                          />
+                        : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
+                            🚧
+                          </div>
+                      }
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
+                          <PriorityBadge level={r.severity} />
+                          {isResolved && (
+                            <span className="text-caption font-semibold text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                              ✅ Resolved
+                            </span>
+                          )}
                         </div>
-                        <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '4px' }}>{r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}</p>
-                        <p style={{ color: '#94a3b8', fontSize: '12px' }}>{new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        <p className="text-caption text-muted mb-1 leading-relaxed">
+                          {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
+                        </p>
+                        <p className="text-caption text-muted">
+                          {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
                       </div>
-                      <span style={{ fontSize: '12px', color: isResolved ? '#16a34a' : '#f59e0b', fontWeight: '600', background: isResolved ? '#f0fdf4' : '#fffbeb', padding: '4px 10px', borderRadius: '20px', border: `1px solid ${isResolved ? '#bbf7d0' : '#fde68a'}`, flexShrink: 0 }}>
+
+                      {/* Status pill */}
+                      <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
+                        isResolved
+                          ? 'text-accent bg-accent/10 border-accent/20'
+                          : 'text-warn bg-warn/10 border-warn/20'
+                      }`}>
                         {isResolved ? 'Resolved' : 'Active'}
                       </span>
                     </div>
-                  )
-                })}
-              </div>
+                  </Card>
+                )
+              })
             )}
           </div>
         )}
 
-        {/* Security Tab */}
+        {/* ═══════════════════════════════════════════════════════════
+            SECURITY TAB
+        ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'security' && (
-          <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>Change Password</h2>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>Make sure your new password is at least 8 characters and includes a letter and a number</p>
+          <div className="space-y-4">
 
-            {[
-              { label: 'Current Password', key: 'old_password', placeholder: '••••••••' },
-              { label: 'New Password', key: 'new_password', placeholder: 'Min 8 chars, include a letter and number' },
-              { label: 'Confirm New Password', key: 'confirm', placeholder: 'Repeat new password' },
-            ].map(f => (
-              <div key={f.key} style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>{f.label}</label>
-                <input type="password" placeholder={f.placeholder} value={pwForm[f.key]}
-                  onChange={e => setPwForm(p => ({ ...p, [f.key]: e.target.value }))} style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = '#16a34a'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} />
+            {/* Change password */}
+            <Card className="p-5">
+              <h2 className="text-section font-bold text-light mb-1">Change Password</h2>
+              <p className="text-caption text-muted mb-5">
+                At least 8 characters, one letter and one number.
+              </p>
+
+              <div className="space-y-4">
+                {[
+                  { label: 'Current Password',      key: 'old_password', placeholder: '••••••••' },
+                  { label: 'New Password',           key: 'new_password', placeholder: 'Min 8 chars, include a letter and number' },
+                  { label: 'Confirm New Password',   key: 'confirm',      placeholder: 'Repeat new password' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className={LABEL_CLS}>{f.label}</label>
+                    <input
+                      type="password"
+                      placeholder={f.placeholder}
+                      value={pwForm[f.key]}
+                      onChange={e => setPwForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
 
-            {pwError && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '14px', marginBottom: '16px' }}>{pwError}</div>}
-            {pwMsg && <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', color: '#16a34a', fontSize: '14px', marginBottom: '16px' }}>{pwMsg}</div>}
+              {pwError && (
+                <div className="mt-4 bg-danger/10 border border-danger/30 rounded-xl px-4 py-3 text-body text-danger">
+                  {pwError}
+                </div>
+              )}
+              {pwMsg && (
+                <div className="mt-4 bg-accent/10 border border-accent/30 rounded-xl px-4 py-3 text-body text-accent">
+                  {pwMsg}
+                </div>
+              )}
 
-            <button onClick={handleChangePassword} disabled={pwLoading} style={{ width: '100%', padding: '13px', background: pwLoading ? '#86efac' : '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: pwLoading ? 'not-allowed' : 'pointer' }}>
-              {pwLoading ? 'Changing…' : '🔒 Change Password'}
-            </button>
+              <Button
+                variant="primary"
+                className="w-full mt-5"
+                onClick={handleChangePassword}
+                disabled={pwLoading}
+              >
+                {pwLoading ? 'Changing…' : '🔒 Change Password'}
+              </Button>
+            </Card>
 
-            {/* FEAT-3 — Account Deletion */}
-            <div style={{ marginTop: '40px', paddingTop: '24px', borderTop: '1px solid #fee2e2' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#dc2626', marginBottom: '6px' }}>⚠️ Delete Account</h3>
-              <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>Permanently delete your account. Your reports will be anonymized and kept for community safety.</p>
+            {/* ── Danger zone — account deletion ──────────────────── */}
+            <Card className="p-5 border-danger/30">
+              <h3 className="text-section font-bold text-danger mb-1">⚠️ Delete Account</h3>
+              <p className="text-caption text-muted mb-4">
+                Permanently delete your account. Your reports will be anonymized and kept for community safety.
+              </p>
 
               {!deleteStep && (
-                <button onClick={() => setDeleteStep('confirm')} style={{ padding: '11px 20px', background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                <button
+                  onClick={() => setDeleteStep('confirm')}
+                  className="px-4 py-2.5 bg-danger/10 text-danger border border-danger/30 rounded-xl text-body font-semibold hover:bg-danger/20 transition-colors focus:outline-none"
+                >
                   Delete My Account
                 </button>
               )}
 
               {deleteStep === 'confirm' && (
-                <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '12px', padding: '20px' }}>
-                  <p style={{ color: '#dc2626', fontWeight: '600', fontSize: '14px', marginBottom: '12px' }}>Are you sure? This cannot be undone.</p>
-                  <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>Your reports will be anonymised and kept for community safety records.</p>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => setDeleteStep(null)} style={{ flex: 1, padding: '10px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
-                    <button onClick={() => setDeleteStep('reason')} style={{ flex: 1, padding: '10px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                <div className="bg-danger/10 border border-danger/30 rounded-xl p-4">
+                  <p className="text-body text-danger font-semibold mb-2">Are you sure? This cannot be undone.</p>
+                  <p className="text-caption text-muted mb-4">Your reports will be anonymised and kept for community safety records.</p>
+                  <div className="flex gap-3">
+                    <Button variant="secondary" className="flex-1" onClick={() => setDeleteStep(null)}>Cancel</Button>
+                    <button
+                      onClick={() => setDeleteStep('reason')}
+                      className="flex-1 py-2.5 bg-danger text-canvas rounded-xl text-body font-semibold hover:opacity-90 transition-opacity focus:outline-none"
+                    >
                       Continue →
                     </button>
                   </div>
@@ -398,46 +566,59 @@ export default function Profile() {
               )}
 
               {deleteStep === 'reason' && (
-                <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '12px', padding: '20px' }}>
-                  <p style={{ color: '#dc2626', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>Before you go, could you tell us why?</p>
-                  <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '16px' }}>This helps us improve the app. Completely optional.</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                <div className="bg-danger/10 border border-danger/30 rounded-xl p-4 space-y-4">
+                  <div>
+                    <p className="text-body text-danger font-semibold mb-1">Before you go, could you tell us why?</p>
+                    <p className="text-caption text-muted">Completely optional — helps us improve.</p>
+                  </div>
+                  <div className="space-y-2.5">
                     {[
-                      { value: 'no_longer_needed', label: 'I no longer need the app' },
-                      { value: 'privacy_concerns', label: 'Privacy concerns' },
-                      { value: 'too_many_notifications', label: 'Too many notifications' },
-                      { value: 'better_alternative', label: 'Found a better alternative' },
-                      { value: 'technical_issues', label: 'Technical issues' },
-                      { value: 'other', label: 'Other' },
+                      { value: 'no_longer_needed',      label: 'I no longer need the app'    },
+                      { value: 'privacy_concerns',      label: 'Privacy concerns'             },
+                      { value: 'too_many_notifications',label: 'Too many notifications'       },
+                      { value: 'better_alternative',    label: 'Found a better alternative'  },
+                      { value: 'technical_issues',      label: 'Technical issues'            },
+                      { value: 'other',                 label: 'Other'                        },
                     ].map(opt => (
-                      <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '14px', color: '#374151' }}>
+                      <label
+                        key={opt.value}
+                        className="flex items-center gap-3 cursor-pointer text-body text-light"
+                      >
                         <input
                           type="radio"
                           name="deleteReason"
                           value={opt.value}
                           checked={deleteReason === opt.value}
                           onChange={e => setDeleteReason(e.target.value)}
-                          style={{ accentColor: '#dc2626', width: '16px', height: '16px', cursor: 'pointer' }}
+                          style={{ accentColor: '#EF4444', width: '16px', height: '16px', cursor: 'pointer' }}
                         />
                         {opt.label}
                       </label>
                     ))}
                   </div>
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>Any additional comments? <span style={{ fontWeight: '400', color: '#94a3b8' }}>(optional)</span></label>
+                  <div>
+                    <label className="block text-caption text-muted font-semibold mb-1.5">
+                      Additional comments <span className="font-normal">(optional)</span>
+                    </label>
                     <textarea
                       value={deleteComment}
                       onChange={e => setDeleteComment(e.target.value.slice(0, 500))}
                       placeholder="Tell us more…"
                       rows={3}
-                      style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #fecaca', borderRadius: '8px', fontSize: '13px', outline: 'none', background: '#fff', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      className="w-full bg-canvas border border-danger/30 rounded-xl px-4 py-3 text-body text-light placeholder:text-muted focus:outline-none focus:border-danger resize-y"
                     />
-                    <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', textAlign: 'right' }}>{deleteComment.length}/500</p>
+                    <p className="text-caption text-muted mt-1 text-right">{deleteComment.length}/500</p>
                   </div>
-                  {deleteError && <p style={{ color: '#dc2626', fontSize: '13px', marginBottom: '10px' }}>{deleteError}</p>}
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => { setDeleteStep('confirm'); setDeleteError('') }} style={{ flex: 1, padding: '10px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>← Back</button>
-                    <button onClick={handleRequestDeleteOTP} disabled={deleteLoading} style={{ flex: 1, padding: '10px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  {deleteError && <p className="text-caption text-danger">{deleteError}</p>}
+                  <div className="flex gap-3">
+                    <Button variant="secondary" className="flex-1" onClick={() => { setDeleteStep('confirm'); setDeleteError('') }}>
+                      ← Back
+                    </Button>
+                    <button
+                      onClick={handleRequestDeleteOTP}
+                      disabled={deleteLoading}
+                      className="flex-1 py-2.5 bg-danger text-canvas rounded-xl text-body font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity focus:outline-none"
+                    >
                       {deleteLoading ? 'Sending…' : 'Continue to verification'}
                     </button>
                   </div>
@@ -445,93 +626,133 @@ export default function Profile() {
               )}
 
               {deleteStep === 'otp' && (
-                <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '12px', padding: '20px' }}>
-                  <p style={{ color: '#dc2626', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>Enter the 6-digit code sent to your email</p>
-                  <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '12px' }}>This is your final confirmation step.</p>
-                  <input type="text" placeholder="000000" maxLength={6} value={deleteOtp}
+                <div className="bg-danger/10 border border-danger/30 rounded-xl p-4 space-y-3">
+                  <div>
+                    <p className="text-body text-danger font-semibold">Enter the 6-digit code sent to your email</p>
+                    <p className="text-caption text-muted">This is your final confirmation step.</p>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="000000"
+                    maxLength={6}
+                    value={deleteOtp}
                     onChange={e => setDeleteOtp(e.target.value.replace(/\D/g, ''))}
-                    style={{ width: '100%', padding: '12px', border: '1.5px solid #fecaca', borderRadius: '8px', fontSize: '22px', textAlign: 'center', letterSpacing: '8px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }} />
-                  {deleteError && <p style={{ color: '#dc2626', fontSize: '13px', marginBottom: '10px' }}>{deleteError}</p>}
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => { setDeleteStep(null); setDeleteOtp(''); setDeleteError('') }} style={{ flex: 1, padding: '10px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
-                    <button onClick={handleConfirmDelete} disabled={deleteLoading} style={{ flex: 1, padding: '10px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                    className="w-full bg-canvas border border-danger/30 rounded-xl px-4 py-3 text-[22px] text-light text-center font-bold tracking-[8px] focus:outline-none focus:border-danger"
+                  />
+                  {deleteError && <p className="text-caption text-danger">{deleteError}</p>}
+                  <div className="flex gap-3">
+                    <Button variant="secondary" className="flex-1" onClick={() => { setDeleteStep(null); setDeleteOtp(''); setDeleteError('') }}>
+                      Cancel
+                    </Button>
+                    <button
+                      onClick={handleConfirmDelete}
+                      disabled={deleteLoading}
+                      className="flex-1 py-2.5 bg-danger text-canvas rounded-xl text-body font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity focus:outline-none"
+                    >
                       {deleteLoading ? 'Deleting…' : 'Permanently Delete'}
                     </button>
                   </div>
                 </div>
               )}
 
-              {deleteMsg && <p style={{ color: '#dc2626', fontSize: '13px', marginTop: '10px' }}>{deleteMsg}</p>}
-            </div>
+              {deleteMsg && <p className="text-caption text-danger mt-3">{deleteMsg}</p>}
+            </Card>
           </div>
         )}
 
-        {/* Emergency Contacts Tab */}
+        {/* ═══════════════════════════════════════════════════════════
+            EMERGENCY CONTACTS TAB
+        ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'emergency' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>Emergency Contacts</h2>
-                <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>These are shared with the Emergency page</p>
+                <h2 className="text-section font-bold text-light">Emergency Contacts</h2>
+                <p className="text-caption text-muted mt-1">Shared with the Emergency page</p>
               </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => navigate('/emergency')} style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>🚨 Emergency Page</button>
-                <button onClick={() => setShowAddContact(true)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>+ Add Contact</button>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="secondary" size="sm" onClick={() => navigate('/emergency')}>
+                  🚨 Emergency Page
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => setShowAddContact(true)}>
+                  + Add
+                </Button>
               </div>
             </div>
 
+            {/* Add contact form */}
             {showAddContact && (
-              <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', marginBottom: '16px', border: '1.5px solid #16a34a', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '16px' }}>Add Emergency Contact</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <Card className="p-4 border-accent/40">
+                <h3 className="text-body font-bold text-light mb-4">Add Emergency Contact</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   {[
-                    { label: 'Full Name', key: 'name', type: 'text', placeholder: 'e.g. Mom' },
-                    { label: 'Phone Number', key: 'phone', type: 'tel', placeholder: '+1 234 567 8900' },
-                    { label: 'Relation', key: 'relation', type: 'text', placeholder: 'e.g. Mother' },
+                    { label: 'Full Name',     key: 'name',     type: 'text', placeholder: 'e.g. Mom'           },
+                    { label: 'Phone Number',  key: 'phone',    type: 'tel',  placeholder: '+1 234 567 8900'     },
+                    { label: 'Relation',      key: 'relation', type: 'text', placeholder: 'e.g. Mother'         },
                   ].map(f => (
                     <div key={f.key}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
-                      <input type={f.type} placeholder={f.placeholder} value={newContact[f.key]}
-                        onChange={e => setNewContact(p => ({ ...p, [f.key]: e.target.value }))} style={inputStyle}
-                        onFocus={e => e.target.style.borderColor = '#16a34a'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} />
+                      <label className={LABEL_CLS}>{f.label}</label>
+                      <input
+                        type={f.type}
+                        placeholder={f.placeholder}
+                        value={newContact[f.key]}
+                        onChange={e => setNewContact(p => ({ ...p, [f.key]: e.target.value }))}
+                        className={INPUT_CLS}
+                      />
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => setShowAddContact(false)} style={{ padding: '10px 20px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
-                  <button onClick={saveContact} style={{ padding: '10px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Save Contact</button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => setShowAddContact(false)}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={saveContact}>Save Contact</Button>
                 </div>
-              </div>
+              </Card>
             )}
 
+            {/* Empty state */}
             {contacts.length === 0 && !showAddContact ? (
-              <div style={{ background: '#fff', borderRadius: '16px', padding: '48px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
-                <p style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a' }}>No emergency contacts yet</p>
-                <p style={{ color: '#64748b', fontSize: '14px', marginTop: '8px', marginBottom: '20px' }}>Add people to reach in case of emergency</p>
-                <button onClick={() => setShowAddContact(true)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>+ Add First Contact</button>
-              </div>
+              <Card className="p-12 text-center">
+                <div className="text-5xl mb-4" aria-hidden="true">👥</div>
+                <p className="text-section font-semibold text-light mb-2">No emergency contacts yet</p>
+                <p className="text-body text-muted mb-6">Add people to reach in case of emergency</p>
+                <Button variant="primary" onClick={() => setShowAddContact(true)}>+ Add First Contact</Button>
+              </Card>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {contacts.map(c => (
-                  <div key={c.id} style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>👤</div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px' }}>{c.name}</p>
-                      <p style={{ color: '#16a34a', fontSize: '14px', fontWeight: '600' }}>{c.phone}</p>
-                      {c.relation && <p style={{ color: '#94a3b8', fontSize: '12px' }}>{c.relation}</p>}
+              contacts.map(c => (
+                <Card key={c.id} className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-xl shrink-0" aria-hidden="true">
+                      👤
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <a href={`tel:${c.phone}`} style={{ background: '#16a34a', color: '#fff', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', textDecoration: 'none' }}>📞 Call</a>
-                      <button onClick={() => deleteContact(c.id)} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer' }}>Remove</button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-body text-light font-bold truncate">{c.name}</p>
+                      <p className="text-caption text-accent font-semibold">{c.phone}</p>
+                      {c.relation && <p className="text-caption text-muted">{c.relation}</p>}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <a
+                        href={`tel:${c.phone}`}
+                        className="text-caption font-semibold text-canvas bg-accent px-3 py-2 rounded-xl hover:opacity-90 transition-opacity"
+                      >
+                        📞 Call
+                      </a>
+                      <button
+                        onClick={() => deleteContact(c.id)}
+                        className="text-caption font-semibold text-danger bg-danger/10 border border-danger/30 px-3 py-2 rounded-xl hover:bg-danger/20 transition-colors focus:outline-none"
+                      >
+                        Remove
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                </Card>
+              ))
             )}
           </div>
         )}
-      </div>
+
+      </main>
+
+      <BottomNav />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const Sentry = require('@sentry/node');
+const Sentry = process.env.SENTRY_DSN ? require('@sentry/node') : null;
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const { doubleCsrf } = require('csrf-csrf');
@@ -117,7 +117,7 @@ app.use('/api/v1/public', publicRoutes);
 app.use('/api/v1/master', masterDataRoutes);
 
 // MON1 — Sentry error handler (must be before other error middleware)
-if (process.env.SENTRY_DSN) {
+if (Sentry) {
   Sentry.setupExpressErrorHandler(app);
 }
 

@@ -1,8 +1,9 @@
 require('dotenv').config();
 
-// MON1 — Sentry must initialise before any other require
-const Sentry = require('@sentry/node');
+// MON1 — Sentry must initialise before any other require; only load when DSN is set
+// (require('@sentry/node') hangs in WSL2 due to OTLP endpoint probing on localhost:4318)
 if (process.env.SENTRY_DSN) {
+  const Sentry = require('@sentry/node');
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || 'development',

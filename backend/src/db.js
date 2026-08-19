@@ -9,10 +9,19 @@ const POOL_TUNING = {
 
 function getConnectionConfig() {
   const isProd = process.env.NODE_ENV === 'production';
-  const url = isProd ? process.env.DB_PROD_URL : process.env.DB_DEV_URL;
 
-  if (url) return { connectionString: url, ...POOL_TUNING };
-  if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, ...POOL_TUNING };
+  if (isProd) {
+    if (process.env.DB_PROD_URL) {
+      return { connectionString: process.env.DB_PROD_URL, ...POOL_TUNING };
+    }
+    if (process.env.DATABASE_URL) {
+      return { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, ...POOL_TUNING };
+    }
+  }
+
+  if (process.env.DB_DEV_URL) {
+    return { connectionString: process.env.DB_DEV_URL, ...POOL_TUNING };
+  }
 
   return {
     host: process.env.DB_HOST,
@@ -26,13 +35,19 @@ function getConnectionConfig() {
 
 const pool = new Pool(getConnectionConfig());
 
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('❌ PostgreSQL connection failed:', err.message);
-  } else {
-    console.log('✅ PostgreSQL connected successfully');
-    release();
-  }
+// Defer the startup connectivity check until after all modules finish loading.
+// pool.connect() starts a 2 s timer immediately; if synchronous module loading
+// (Firebase, AWS SDK, routes) takes longer the timer fires before the callback
+// can run even though Postgres is reachable.
+setImmediate(() => {
+  pool.connect((err, client, release) => {
+    if (err) {
+      console.error('❌ PostgreSQL connection failed:', err.message);
+    } else {
+      console.log('✅ PostgreSQL connected successfully');
+      release();
+    }
+  });
 });
 
 module.exports = pool;

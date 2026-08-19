@@ -4,22 +4,23 @@ const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET notifications — exclude soft-deleted rows
+// GET notifications — return rows targeted to this user OR global (user_id IS NULL)
 router.get('/', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT * FROM notifications
       WHERE deleted_at IS NULL
+        AND (user_id = $1 OR user_id IS NULL)
       ORDER BY created_at DESC
       LIMIT 30
-    `);
+    `, [req.user.id]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET unread count — exclude soft-deleted rows
+// GET unread count — only count rows visible to this user
 router.get('/unread-count', verifyToken, async (req, res) => {
   try {
     const lastRead = await pool.query(
@@ -31,8 +32,9 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     const count = await pool.query(
       `SELECT COUNT(*) FROM notifications
        WHERE created_at > $1
-         AND deleted_at IS NULL`,
-      [since]
+         AND deleted_at IS NULL
+         AND (user_id = $2 OR user_id IS NULL)`,
+      [since, req.user.id]
     );
 
     res.json({ count: parseInt(count.rows[0].count) });
@@ -56,15 +58,17 @@ router.put('/read-all', verifyToken, async (req, res) => {
   }
 });
 
-// DELETE /clear-all — MUST be declared before /:id so Express doesn't treat
-// "clear-all" as an :id parameter value
+// DELETE /clear-all — soft-delete all rows this user can see (their own + global)
+// MUST be declared before /:id so Express doesn't treat "clear-all" as an :id value
 router.delete('/clear-all', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE notifications
        SET deleted_at = NOW()
        WHERE deleted_at IS NULL
-       RETURNING id`
+         AND (user_id = $1 OR user_id IS NULL)
+       RETURNING id`,
+      [req.user.id]
     );
     res.json({
       message: `Cleared ${result.rowCount} notification(s) ✅`,
@@ -75,7 +79,7 @@ router.delete('/clear-all', verifyToken, async (req, res) => {
   }
 });
 
-// DELETE /:id — soft-delete a single notification
+// DELETE /:id — soft-delete a single notification this user can see
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -83,8 +87,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
        SET deleted_at = NOW()
        WHERE id = $1
          AND deleted_at IS NULL
+         AND (user_id = $2 OR user_id IS NULL)
        RETURNING id`,
-      [req.params.id]
+      [req.params.id, req.user.id]
     );
     if (result.rows.length === 0)
       return res.status(404).json({ message: 'Notification not found' });

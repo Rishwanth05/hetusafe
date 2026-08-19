@@ -8,6 +8,8 @@ import Report from './pages/Report'
 import Results from './pages/Results'
 import Contact from './pages/Contact'
 import Emergency from './pages/Emergency'
+import Alerts from './pages/Alerts'
+import MyReports from './pages/MyReports'
 import Profile from './pages/Profile'
 import Leaderboard from './pages/Leaderboard'
 import Admin from './pages/Admin'
@@ -37,6 +39,8 @@ export default function App() {
           <Route path="/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
           <Route path="/contact" element={<ProtectedRoute><Contact /></ProtectedRoute>} />
           <Route path="/emergency" element={<ProtectedRoute><Emergency /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+          <Route path="/my-reports" element={<ProtectedRoute><MyReports /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />

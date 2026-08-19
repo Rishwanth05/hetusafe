@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DATA — unchanged from original
+══════════════════════════════════════════════════════════════════════════ */
+
 const HAZARD_CATEGORIES = [
   'Pothole / Road Damage', 'Broken Street Light', 'Fallen Tree / Branch',
   'Flooding / Drainage Issue', 'Abandoned Vehicle', 'Graffiti / Vandalism',
@@ -10,18 +14,22 @@ const HAZARD_CATEGORIES = [
 ]
 
 const FEATURES = [
-  { icon: '📍', title: 'Real-time Map', desc: 'See every hazard plotted live on an interactive map with clustering and heatmap views.' },
-  { icon: '📷', title: 'Photo Proof', desc: 'Attach up to 3 photos per report. Camera-verified resolution prevents false closures.' },
-  { icon: '🔔', title: 'Instant Alerts', desc: 'Push notifications the moment a critical hazard is reported within 10 km of you.' },
-  { icon: '🛡️', title: 'Trust Scores', desc: 'Community-driven reputation system rewards accurate, verified reporters.' },
-  { icon: '📊', title: 'Analytics', desc: 'Resolution time trends, category breakdowns, and SLA compliance reports.' },
+  { icon: '📍', title: 'Real-time Map',    desc: 'See every hazard plotted live on an interactive map with clustering and heatmap views.' },
+  { icon: '📷', title: 'Photo Proof',      desc: 'Attach up to 3 photos per report. Camera-verified resolution prevents false closures.' },
+  { icon: '🔔', title: 'Instant Alerts',   desc: 'Push notifications the moment a critical hazard is reported within 10 km of you.' },
+  { icon: '🛡️', title: 'Trust Scores',    desc: 'Community-driven reputation system rewards accurate, verified reporters.' },
+  { icon: '📊', title: 'Analytics',        desc: 'Resolution time trends, category breakdowns, and SLA compliance reports.' },
 ]
 
 const HOW_IT_WORKS = [
-  { step: '01', title: 'Spot a hazard', desc: 'Open the app, tap Report, and drop a pin exactly where the problem is.' },
-  { step: '02', title: 'Submit with proof', desc: 'Choose a category, add photos, and describe the severity. Done in under 60 seconds.' },
-  { step: '03', title: 'Track resolution', desc: 'Watch your report move through review → in progress → resolved with status updates.' },
+  { step: '01', title: 'Spot a hazard',       desc: 'Open the app, tap Report, and drop a pin exactly where the problem is.' },
+  { step: '02', title: 'Submit with proof',   desc: 'Choose a category, add photos, and describe the severity. Done in under 60 seconds.' },
+  { step: '03', title: 'Track resolution',    desc: 'Watch your report move through review → in progress → resolved with status updates.' },
 ]
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOOKS — useCountUp unchanged from original
+══════════════════════════════════════════════════════════════════════════ */
 
 function useCountUp(target, duration = 2000, start = false) {
   const [count, setCount] = useState(0)
@@ -38,6 +46,10 @@ function useCountUp(target, duration = 2000, start = false) {
   }, [target, duration, start])
   return count
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STAT CARD — logic unchanged, styled to match app dark tokens
+══════════════════════════════════════════════════════════════════════════ */
 
 function StatCard({ value, label, prefix = '', suffix = '', animate }) {
   const count = useCountUp(value, 2200, animate)
@@ -59,14 +71,145 @@ function StatCard({ value, label, prefix = '', suffix = '', animate }) {
   )
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   MAP PREVIEW — NEW: SVG illustration of live hazard reporting
+   Pure CSS animations, zero JS, zero new dependencies.
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Hazard pins: [cx, cy, color, label, clusterCount, animDelay] */
+const MAP_PINS = [
+  [68,  44,  '#7c3aed', 'Gas Leak',      0, '0s'   ],
+  [232, 38,  '#ef4444', 'Pothole',        0, '0.4s' ],
+  [478, 55,  '#ef4444', null,             3, '0.8s' ],
+  [88,  148, '#f59e0b', null,             0, '1.2s' ],
+  [275, 142, '#22c55e', null,             0, '0.6s' ],
+  [468, 150, '#7c3aed', 'Exposed Wire',  0, '1.5s' ],
+  [62,  248, '#ef4444', null,             0, '0.9s' ],
+  [258, 252, '#f59e0b', null,             0, '0.2s' ],
+  [508, 248, '#22c55e', null,             0, '1.1s' ],
+]
+
+function MapPreview() {
+  return (
+    <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', background: '#080d18' }}>
+      {/* Live badge */}
+      <div style={{
+        position: 'absolute', top: '14px', right: '14px', zIndex: 2,
+        display: 'flex', alignItems: 'center', gap: '6px',
+        background: 'rgba(10,15,30,0.85)', backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(34,197,94,0.3)', borderRadius: '999px',
+        padding: '4px 12px', fontSize: '12px', fontWeight: '700', color: '#4ade80',
+      }}>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+        LIVE
+      </div>
+
+      <svg
+        viewBox="0 0 600 300"
+        width="100%"
+        style={{ display: 'block', maxHeight: '340px' }}
+        aria-label="Live hazard map preview showing reported incidents"
+        role="img"
+      >
+        {/* ── Background ───────────────────────────────────────────── */}
+        <rect width="600" height="300" fill="#080d18" />
+
+        {/* Grid pattern */}
+        <defs>
+          <pattern id="mapGrid" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
+            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="600" height="300" fill="url(#mapGrid)" />
+
+        {/* ── City blocks (subtle fill between roads) ─────────────── */}
+        {[
+          [0,0,155,95],[165,0,180,95],[355,0,245,95],
+          [0,105,155,90],[165,105,180,90],[355,105,245,90],
+          [0,205,155,95],[165,205,180,95],[355,205,245,95],
+        ].map(([x,y,w,h],i) => (
+          <rect key={i} x={x} y={y} width={w} height={h} fill="rgba(255,255,255,0.018)" />
+        ))}
+
+        {/* ── Roads ────────────────────────────────────────────────── */}
+        {/* Major horizontal */}
+        <rect x="0" y="92" width="600" height="13" fill="rgba(255,255,255,0.07)" />
+        <rect x="0" y="192" width="600" height="11" fill="rgba(255,255,255,0.065)" />
+        {/* Major vertical */}
+        <rect x="152" y="0" width="13" height="300" fill="rgba(255,255,255,0.09)" />
+        <rect x="342" y="0" width="13" height="300" fill="rgba(255,255,255,0.07)" />
+        {/* Road centre lines */}
+        <line x1="0" y1="98.5" x2="600" y2="98.5" stroke="rgba(255,255,0,0.08)" strokeWidth="1" strokeDasharray="14 10" />
+        <line x1="0" y1="197.5" x2="600" y2="197.5" stroke="rgba(255,255,0,0.06)" strokeWidth="1" strokeDasharray="14 10" />
+        <line x1="158.5" y1="0" x2="158.5" y2="300" stroke="rgba(255,255,0,0.06)" strokeWidth="1" strokeDasharray="14 10" />
+        <line x1="348.5" y1="0" x2="348.5" y2="300" stroke="rgba(255,255,0,0.05)" strokeWidth="1" strokeDasharray="14 10" />
+
+        {/* ── Hazard pins ──────────────────────────────────────────── */}
+        {MAP_PINS.map(([cx, cy, color, label, cluster, delay], i) => (
+          <g key={i} transform={`translate(${cx},${cy})`}>
+            {/* Pulse ring 1 */}
+            <circle
+              cx="0" cy="0" r={cluster ? 14 : 8}
+              fill="none" stroke={color} strokeWidth="1.5"
+              style={{
+                transformBox: 'fill-box', transformOrigin: 'center',
+                animation: `mapPulse 2.8s ease-out ${delay} infinite`,
+                opacity: 0.8,
+              }}
+            />
+            {/* Pulse ring 2 (offset) */}
+            <circle
+              cx="0" cy="0" r={cluster ? 14 : 8}
+              fill="none" stroke={color} strokeWidth="1"
+              style={{
+                transformBox: 'fill-box', transformOrigin: 'center',
+                animation: `mapPulse 2.8s ease-out calc(${delay} + 1.4s) infinite`,
+                opacity: 0.5,
+              }}
+            />
+            {/* Inner dot / cluster bubble */}
+            <circle cx="0" cy="0" r={cluster ? 12 : 5} fill={color} opacity="0.92" />
+            {cluster > 0 && (
+              <text x="0" y="4" textAnchor="middle" fill="white" fontSize="10" fontWeight="800">{cluster}</text>
+            )}
+            {/* Label */}
+            {label && (
+              <text x="0" y={cluster ? -18 : -12} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize="9.5" fontWeight="600">
+                {label}
+              </text>
+            )}
+          </g>
+        ))}
+
+        {/* ── Legend ───────────────────────────────────────────────── */}
+        <g transform="translate(10, 272)">
+          {[['#7c3aed','Critical'],['#ef4444','High'],['#f59e0b','Medium'],['#22c55e','Low']].map(([c,l],i) => (
+            <g key={l} transform={`translate(${i * 80}, 0)`}>
+              <circle cx="5" cy="5" r="4" fill={c} />
+              <text x="14" y="9" fill="rgba(255,255,255,0.45)" fontSize="9">{l}</text>
+            </g>
+          ))}
+        </g>
+      </svg>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════════════════════ */
+
 export default function Landing() {
   const { user } = useAuth()
-  const navigate = useNavigate()
-  const [stats, setStats] = useState(null)
+  const navigate  = useNavigate()
+
+  /* ── All existing state (unchanged) ──────────────────────────────────── */
+  const [stats, setStats]               = useState(null)
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef(null)
-  const [scrolled, setScrolled] = useState(false)
+  const [scrolled, setScrolled]         = useState(false)
 
+  /* ── All existing useEffects (unchanged) ─────────────────────────────── */
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/api/v1/public/stats`)
       .then(r => r.json())
@@ -89,10 +232,77 @@ export default function Landing() {
     return () => observer.disconnect()
   }, [])
 
+  /* ── NEW: single IntersectionObserver for scroll-reveal sections ─────── */
+  useEffect(() => {
+    const els = document.querySelectorAll('[data-reveal]')
+    if (!els.length) return
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.setAttribute('data-revealed', '')
+          obs.unobserve(entry.target)
+        }
+      })
+    }, { threshold: 0.07, rootMargin: '0px 0px -30px 0px' })
+    els.forEach(el => obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
+
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <div style={{ minHeight: '100vh', background: '#0a0f1e', fontFamily: "'DM Sans', system-ui, sans-serif", color: '#f1f5f9', overflowX: 'hidden' }}>
 
-      {/* ── NAV ── */}
+      {/* ── ALL KEYFRAMES ────────────────────────────────────────────── */}
+      <style>{`
+        @keyframes pulse    { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
+        @keyframes fadeUp   { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes shimmer  { 0%{background-position:200% center} 100%{background-position:-200% center} }
+        @keyframes mapPulse { 0%{transform:scale(1);opacity:0.8} 70%{transform:scale(3.2);opacity:0} 100%{transform:scale(3.2);opacity:0} }
+
+        /* Scroll-reveal: start hidden, transition to visible on [data-revealed] */
+        [data-reveal] {
+          opacity: 0;
+          transform: translateY(22px);
+          transition: opacity 0.65s ease, transform 0.65s ease;
+        }
+        [data-reveal][data-revealed] {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        /* Stagger children with data-delay attribute */
+        [data-reveal][data-delay="1"] { transition-delay: 0.12s; }
+        [data-reveal][data-delay="2"] { transition-delay: 0.24s; }
+        [data-reveal][data-delay="3"] { transition-delay: 0.36s; }
+
+        /* Respect user motion preferences — disable all animations */
+        @media (prefers-reduced-motion: reduce) {
+          [data-reveal], [data-reveal][data-revealed] {
+            opacity: 1; transform: none; transition: none;
+          }
+          * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+        }
+
+        /* Feature card hover glow */
+        .feat-card {
+          transition: transform 300ms ease, border-color 300ms ease,
+                      background 300ms ease, box-shadow 300ms ease;
+        }
+        .feat-card:hover {
+          transform: translateY(-4px);
+          border-color: rgba(34,197,94,0.35) !important;
+          background: rgba(34,197,94,0.05) !important;
+          box-shadow: 0 0 24px rgba(34,197,94,0.12);
+        }
+        .how-card {
+          transition: transform 300ms ease, border-color 300ms ease;
+        }
+        .how-card:hover {
+          transform: translateY(-4px);
+          border-color: rgba(34,197,94,0.3) !important;
+        }
+      `}</style>
+
+      {/* ── NAV (unchanged) ──────────────────────────────────────────── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
         padding: '0 24px', height: '64px',
@@ -128,7 +338,7 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* ── HERO ── */}
+      {/* ── HERO (existing gradient orbs + animations, unchanged) ─────── */}
       <section style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '80px 24px 60px', textAlign: 'center', position: 'relative', overflow: 'hidden',
@@ -154,12 +364,6 @@ export default function Landing() {
             animation: 'pulse 7s ease-in-out infinite 1s',
           }}/>
         </div>
-
-        <style>{`
-          @keyframes pulse { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
-          @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-          @keyframes shimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
-        `}</style>
 
         <div style={{ maxWidth: '760px', position: 'relative', zIndex: 1, animation: 'fadeUp 0.7s ease both' }}>
           <div style={{
@@ -214,9 +418,9 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── PROBLEM STATEMENT ── */}
+      {/* ── PROBLEM STATEMENT ── scroll-reveal ───────────────────────── */}
       <section style={{ padding: '80px 24px', maxWidth: '900px', margin: '0 auto' }}>
-        <div style={{
+        <div data-reveal style={{
           background: 'linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(10,15,30,0) 100%)',
           border: '1px solid rgba(22,163,74,0.15)',
           borderRadius: '24px', padding: 'clamp(32px, 5vw, 60px)',
@@ -242,23 +446,25 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
+      {/* ── HOW IT WORKS ── scroll-reveal + staggered steps ─────────── */}
       <section style={{ padding: '80px 24px', maxWidth: '1100px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+        <div data-reveal style={{ textAlign: 'center', marginBottom: '56px' }}>
           <div style={sectionLabel}>How it works</div>
           <h2 style={sectionTitle}>Fixed in three steps</h2>
         </div>
         <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
           {HOW_IT_WORKS.map(({ step, title, desc }, i) => (
-            <div key={step} style={{
-              flex: '1 1 280px', maxWidth: '340px',
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: '20px', padding: '36px 28px',
-              position: 'relative', overflow: 'hidden',
-              transition: 'transform 300ms ease, border-color 300ms ease',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'rgba(22,163,74,0.3)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)' }}
+            <div
+              key={step}
+              data-reveal
+              data-delay={String(i + 1)}
+              className="how-card"
+              style={{
+                flex: '1 1 280px', maxWidth: '340px',
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '20px', padding: '36px 28px',
+                position: 'relative', overflow: 'hidden',
+              }}
             >
               <div style={{
                 position: 'absolute', top: '-10px', right: '-10px',
@@ -280,35 +486,64 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── LIVE STATS ── */}
+      {/* ── MAP PREVIEW — NEW ─────────────────────────────────────────── */}
+      <section style={{ padding: '80px 24px', maxWidth: '900px', margin: '0 auto' }}>
+        <div data-reveal style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <div style={sectionLabel}>Live map</div>
+          <h2 style={sectionTitle}>See every hazard, in real time</h2>
+          <p style={{ color: '#64748b', fontSize: '16px', marginTop: '12px', maxWidth: '500px', margin: '12px auto 0' }}>
+            Reports from your community appear instantly on a shared map. Color-coded by severity. Clustered for clarity.
+          </p>
+        </div>
+        <div data-reveal data-delay="1">
+          <MapPreview />
+        </div>
+        <div data-reveal data-delay="2" style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '24px' }}>
+          {[
+            { color: '#7c3aed', label: 'Critical — immediate danger'   },
+            { color: '#ef4444', label: 'High — urgent attention needed' },
+            { color: '#f59e0b', label: 'Medium — needs attention'       },
+            { color: '#22c55e', label: 'Low — minor issue'              },
+          ].map(({ color, label }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span style={{ color: '#64748b', fontSize: '13px' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── LIVE STATS — existing logic (statsRef + statsVisible + useCountUp) unchanged ── */}
       <section ref={statsRef} style={{ padding: '80px 24px', maxWidth: '900px', margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: '48px' }}>
           <div style={sectionLabel}>Live impact</div>
           <h2 style={sectionTitle}>Real numbers, real change</h2>
         </div>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <StatCard value={stats?.total_reports ?? 0} label="Hazards reported" animate={statsVisible} />
-          <StatCard value={stats?.total_users ?? 0} label="Community members" animate={statsVisible} />
-          <StatCard value={stats?.resolved_count ?? 0} label="Issues resolved" animate={statsVisible} />
-          <StatCard value={stats?.areas_covered ?? 0} label="Areas covered" animate={statsVisible} />
+          <StatCard value={stats?.total_reports   ?? 0} label="Hazards reported"    animate={statsVisible} />
+          <StatCard value={stats?.total_users      ?? 0} label="Community members"   animate={statsVisible} />
+          <StatCard value={stats?.resolved_count   ?? 0} label="Issues resolved"     animate={statsVisible} />
+          <StatCard value={stats?.areas_covered    ?? 0} label="Areas covered"       animate={statsVisible} />
         </div>
       </section>
 
-      {/* ── FEATURES GRID ── */}
+      {/* ── FEATURES GRID ── scroll-reveal + hover glow ─────────────── */}
       <section style={{ padding: '80px 24px', maxWidth: '1100px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+        <div data-reveal style={{ textAlign: 'center', marginBottom: '56px' }}>
           <div style={sectionLabel}>Features</div>
           <h2 style={sectionTitle}>Everything your community needs</h2>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-          {FEATURES.map(({ icon, title, desc }) => (
-            <div key={title} style={{
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: '18px', padding: '28px 24px',
-              transition: 'transform 300ms ease, border-color 300ms ease, background 300ms ease',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = 'rgba(22,163,74,0.25)'; e.currentTarget.style.background = 'rgba(22,163,74,0.05)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+          {FEATURES.map(({ icon, title, desc }, i) => (
+            <div
+              key={title}
+              data-reveal
+              data-delay={String(Math.min(i + 1, 3))}
+              className="feat-card"
+              style={{
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '18px', padding: '28px 24px',
+              }}
             >
               <div style={{ fontSize: '28px', marginBottom: '14px' }}>{icon}</div>
               <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>{title}</h3>
@@ -318,39 +553,43 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── HAZARD CATEGORIES ── */}
+      {/* ── HAZARD CATEGORIES ── scroll-reveal ───────────────────────── */}
       <section style={{ padding: '60px 24px', maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
-        <p style={{ color: '#475569', fontSize: '13px', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '20px' }}>
-          11 hazard categories covered
-        </p>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {HAZARD_CATEGORIES.map(cat => (
-            <span key={cat} style={{
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
-              borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: '#94a3b8',
-            }}>{cat}</span>
-          ))}
+        <div data-reveal>
+          <p style={{ color: '#475569', fontSize: '13px', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '20px' }}>
+            11 hazard categories covered
+          </p>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {HAZARD_CATEGORIES.map(cat => (
+              <span key={cat} style={{
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
+                borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: '#94a3b8',
+              }}>{cat}</span>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ── CTA ── */}
+      {/* ── CTA ── scroll-reveal ─────────────────────────────────────── */}
       <section style={{ padding: '100px 24px', textAlign: 'center', maxWidth: '700px', margin: '0 auto' }}>
-        <h2 style={{ fontSize: 'clamp(28px, 5vw, 52px)', fontWeight: '900', letterSpacing: '-1.5px', marginBottom: '16px' }}>
-          Ready to make your<br/>neighbourhood safer?
-        </h2>
-        <p style={{ color: '#64748b', fontSize: '17px', marginBottom: '36px', lineHeight: '1.7' }}>
-          Join thousands of residents already reporting hazards, holding cities accountable, and seeing real results.
-        </p>
-        <button onClick={() => navigate(user ? '/report' : '/signup')} style={{
-          ...btnStyle('#16a34a'),
-          padding: '16px 40px', fontSize: '17px', fontWeight: '700',
-          boxShadow: '0 0 48px rgba(22,163,74,0.45)',
-        }}>
-          {user ? 'Report a hazard now →' : 'Create your free account →'}
-        </button>
+        <div data-reveal>
+          <h2 style={{ fontSize: 'clamp(28px, 5vw, 52px)', fontWeight: '900', letterSpacing: '-1.5px', marginBottom: '16px' }}>
+            Ready to make your<br/>neighbourhood safer?
+          </h2>
+          <p style={{ color: '#64748b', fontSize: '17px', marginBottom: '36px', lineHeight: '1.7' }}>
+            Join thousands of residents already reporting hazards, holding cities accountable, and seeing real results.
+          </p>
+          <button onClick={() => navigate(user ? '/report' : '/signup')} style={{
+            ...btnStyle('#16a34a'),
+            padding: '16px 40px', fontSize: '17px', fontWeight: '700',
+            boxShadow: '0 0 48px rgba(22,163,74,0.45)',
+          }}>
+            {user ? 'Report a hazard now →' : 'Create your free account →'}
+          </button>
+        </div>
       </section>
 
-      {/* ── FOOTER ── */}
+      {/* ── FOOTER (unchanged) ───────────────────────────────────────── */}
       <footer style={{
         borderTop: '1px solid rgba(255,255,255,0.06)',
         padding: '40px 24px', maxWidth: '1100px', margin: '0 auto',
@@ -383,6 +622,8 @@ export default function Landing() {
     </div>
   )
 }
+
+/* ── Style constants (unchanged from original) ───────────────────────── */
 
 const sectionLabel = {
   display: 'inline-block',

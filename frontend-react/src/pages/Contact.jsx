@@ -1,15 +1,48 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import client from '../api/client'
+import NotificationCenter from '../components/NotificationCenter'
+import { AppDrawer, BottomNav, Card, Button } from '../components/ui'
+
+const INPUT_CLS = 'w-full bg-elevated border border-edge rounded-xl px-4 py-3 text-body text-light placeholder:text-muted focus:outline-none focus:border-accent transition-colors'
+const LABEL_CLS = 'block text-caption text-muted font-semibold mb-1.5'
 
 export default function Contact() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: user?.name || '', email: '', subject: '', message: '' })
+
+  /* ── All existing state (unchanged) ──────────────────────────────────── */
+  const [form, setForm]     = useState({ name: user?.name || '', email: '', subject: '', message: '' })
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
 
+  /* ── Top-bar / drawer state ───────────────────────────────────────────── */
+  const [menuOpen, setMenuOpen]       = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const navMenuRef = useRef(null)
+  const drawerRef  = useRef(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = (e) => {
+      if (!navMenuRef.current?.contains(e.target) && !drawerRef.current?.contains(e.target))
+        setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menuOpen])
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try { setUnreadCount((await client.get('/notifications/unread-count')).data.count) } catch {}
+    }
+    fetchUnread()
+    const id = setInterval(fetchUnread, 20000)
+    return () => clearInterval(id)
+  }, [])
+
+  /* ── Form submission handler (unchanged) ─────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -25,172 +58,152 @@ export default function Contact() {
     }
   }
 
-  const inputStyle = {
-    width: '100%', padding: '12px 16px',
-    border: '1.5px solid #e2e8f0', borderRadius: '10px',
-    fontSize: '15px', outline: 'none', background: '#fff',
-    transition: 'border-color 0.2s', fontFamily: 'inherit',
-  }
-
-  const labelStyle = {
-    display: 'block', fontSize: '13px',
-    fontWeight: '600', color: '#374151', marginBottom: '6px',
-  }
-
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div className="min-h-screen bg-canvas">
 
-      {/* Navbar */}
-      <nav style={{
-        background: '#fff', borderBottom: '1px solid #e2e8f0',
-        padding: '0 32px', height: '64px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <svg width="32" height="32" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="16" fill="#16a34a"/>
-            <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
-            <path d="M22 28L26 32L34 24" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span style={{ fontWeight: '700', fontSize: '18px', color: '#0f172a' }}>Project SAVE</span>
+      {/* ── Top bar ───────────────────────────────────────────────────── */}
+      <header
+        ref={navMenuRef}
+        className="sticky top-0 z-40 bg-canvas/90 backdrop-blur-xl border-b border-edge"
+      >
+        <div className="flex items-center justify-between h-14 px-4 max-w-2xl mx-auto">
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-muted hover:text-light hover:bg-elevated transition-colors shrink-0"
+          >
+            {menuOpen
+              ? <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              : <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            }
+          </button>
+
+          <div className="flex items-center gap-2">
+            <svg width="26" height="26" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+              <rect width="56" height="56" rx="16" fill="#22C55E"/>
+              <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
+              <path d="M22 28L26 32L34 24" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="text-[17px] font-bold text-light tracking-tight">Contact Us</span>
+          </div>
+
+          <NotificationCenter externalCount={unreadCount} />
         </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          style={{
-            background: 'transparent', color: '#64748b',
-            border: '1.5px solid #e2e8f0', borderRadius: '8px',
-            padding: '8px 16px', fontSize: '14px', cursor: 'pointer',
-          }}
-        >
-          ← Back to Dashboard
-        </button>
-      </nav>
+      </header>
 
-      {/* Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #16a34a, #15803d)',
-        padding: '40px 24px', textAlign: 'center', color: '#fff',
-      }}>
-        <h1 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '8px' }}>Contact Us</h1>
-        <p style={{ opacity: 0.85, fontSize: '16px' }}>Have a question or feedback? We'd love to hear from you.</p>
-      </div>
+      <AppDrawer open={menuOpen} onClose={() => setMenuOpen(false)} drawerRef={drawerRef} />
 
-      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ background: '#fff', borderRadius: '16px', padding: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+      {/* ── Main content ──────────────────────────────────────────────── */}
+      <main className="max-w-2xl mx-auto px-4 pb-[calc(4rem+env(safe-area-inset-bottom))]">
 
+        {/* Page header */}
+        <div className="text-center mt-10 mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/15 border border-accent/30 text-3xl mb-4" aria-hidden="true">
+            💬
+          </div>
+          <h1 className="text-hero text-light mb-2">We're here to help</h1>
+          <p className="text-body text-muted">Have a question or feedback? We'd love to hear from you.</p>
+        </div>
+
+        {/* Form card */}
+        <Card className="p-6 mb-4">
+
+          {/* Success banner */}
           {status === 'success' && (
-            <div style={{
-              background: '#f0fdf4', border: '1px solid #bbf7d0',
-              borderRadius: '10px', padding: '16px 20px',
-              color: '#16a34a', fontSize: '15px', marginBottom: '24px',
-              display: 'flex', alignItems: 'center', gap: '10px',
-            }}>
+            <div className="flex items-center gap-3 bg-accent/10 border border-accent/30 rounded-xl px-4 py-3 text-body text-accent mb-6">
               ✅ Message sent! We'll get back to you soon.
             </div>
           )}
 
+          {/* Error banner */}
           {status === 'error' && (
-            <div style={{
-              background: '#fef2f2', border: '1px solid #fecaca',
-              borderRadius: '10px', padding: '16px 20px',
-              color: '#dc2626', fontSize: '15px', marginBottom: '24px',
-            }}>
+            <div className="bg-danger/10 border border-danger/30 rounded-xl px-4 py-3 text-body text-danger mb-6">
               ❌ Something went wrong. Please try again.
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Your Name</label>
+          <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* Name + Email row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL_CLS}>Your Name</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   required
-                  style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = '#16a34a'}
-                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                  className={INPUT_CLS}
                 />
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Email Address</label>
+              <div>
+                <label className={LABEL_CLS}>Email Address</label>
                 <input
                   type="email"
                   placeholder="you@example.com"
                   value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                   required
-                  style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = '#16a34a'}
-                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                  className={INPUT_CLS}
                 />
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={labelStyle}>Subject</label>
+            {/* Subject */}
+            <div>
+              <label className={LABEL_CLS}>Subject</label>
               <input
                 type="text"
                 placeholder="What is this about?"
                 value={form.subject}
                 onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
                 required
-                style={inputStyle}
-                onFocus={e => e.target.style.borderColor = '#16a34a'}
-                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                className={INPUT_CLS}
               />
             </div>
 
-            <div style={{ marginBottom: '24px' }}>
-              <label style={labelStyle}>Message</label>
+            {/* Message */}
+            <div>
+              <label className={LABEL_CLS}>Message</label>
               <textarea
                 placeholder="Tell us what's on your mind…"
                 value={form.message}
                 onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
                 required
                 rows={6}
-                style={{ ...inputStyle, resize: 'vertical' }}
-                onFocus={e => e.target.style.borderColor = '#16a34a'}
-                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                className={`${INPUT_CLS} resize-y`}
               />
             </div>
 
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              className="w-full"
               disabled={loading}
-              style={{
-                width: '100%', padding: '14px',
-                background: loading ? '#86efac' : '#16a34a',
-                color: '#fff', border: 'none', borderRadius: '10px',
-                fontSize: '15px', fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-              }}
             >
               {loading ? 'Sending…' : '✉️ Send Message'}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
 
         {/* Info cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '24px' }}>
+        <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: '📧', title: 'Email Us', desc: 'arishwanthreddy@gmail.com' },
-            { icon: '⏱️', title: 'Response Time', desc: 'Within 24 hours' },
+            { icon: '📧', title: 'Email Us',       desc: 'arishwanthreddy@gmail.com' },
+            { icon: '⏱️', title: 'Response Time',  desc: 'Within 24 hours'          },
           ].map(({ icon, title, desc }) => (
-            <div key={title} style={{
-              background: '#fff', borderRadius: '12px', padding: '20px',
-              border: '1px solid #e2e8f0', textAlign: 'center',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            }}>
-              <div style={{ fontSize: '28px', marginBottom: '8px' }}>{icon}</div>
-              <p style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>{title}</p>
-              <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>{desc}</p>
-            </div>
+            <Card key={title} className="p-5 text-center">
+              <div className="text-3xl mb-2" aria-hidden="true">{icon}</div>
+              <p className="text-body font-semibold text-light mb-1">{title}</p>
+              <p className="text-caption text-muted">{desc}</p>
+            </Card>
           ))}
         </div>
-      </div>
+
+      </main>
+
+      <BottomNav />
     </div>
   )
 }

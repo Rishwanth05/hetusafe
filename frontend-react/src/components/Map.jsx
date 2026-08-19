@@ -45,7 +45,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
 
     mapRef.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center,
       zoom,
     })
@@ -175,14 +175,14 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         popupRef.current = new maplibregl.Popup({ offset: 12 })
           .setLngLat(coords)
           .setHTML(`
-            <div style="font-family:Inter,sans-serif;min-width:200px">
-              <strong style="font-size:14px;color:#0f172a">${props.hazard_type}</strong><br/>
-              <span style="font-size:12px;color:#64748b;text-transform:capitalize">Severity: ${props.severity}</span><br/>
-              <p style="font-size:13px;color:#374151;margin:6px 0">${props.description?.slice(0, 80) || ''}${props.description?.length > 80 ? '…' : ''}</p>
-              <hr style="margin:6px 0;border:none;border-top:1px solid #e2e8f0"/>
-              <span style="font-size:12px;color:#64748b">📅 ${localDate}</span><br/>
-              <span style="font-size:12px;color:#64748b">⏰ ${localTime} · ${timeAgo}</span><br/>
-              ${props.name ? `<span style="font-size:12px;color:#64748b">👤 ${props.name}</span>` : ''}
+            <div style="font-family:Inter,sans-serif;min-width:210px">
+              <strong style="font-size:14px;color:#F5F5F5">${props.hazard_type}</strong><br/>
+              <span style="font-size:12px;color:#9CA3AF;text-transform:capitalize">Severity: ${props.severity}</span><br/>
+              <p style="font-size:13px;color:#D1D5DB;margin:6px 0 4px">${props.description?.slice(0, 80) || ''}${props.description?.length > 80 ? '…' : ''}</p>
+              <hr style="margin:6px 0;border:none;border-top:1px solid #2A332E"/>
+              <span style="font-size:12px;color:#9CA3AF">📅 ${localDate}</span><br/>
+              <span style="font-size:12px;color:#9CA3AF">⏰ ${localTime} · ${timeAgo}</span><br/>
+              ${props.name ? `<span style="font-size:12px;color:#9CA3AF">👤 ${props.name}</span>` : ''}
             </div>
           `)
           .addTo(mapRef.current)

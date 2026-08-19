@@ -86,25 +86,21 @@ const upload = multer({
 // Throws with err.status = 400 on invalid type; propagates S3/sharp errors otherwise.
 async function processAndUploadImage(buffer) {
   // file-type is ESM-only; dynamic import works from CJS on Node 18+.
-  const ftModule = await import('file-type')
-  console.log('[upload-debug] file-type module keys:', Object.keys(ftModule))
-  const { fileTypeFromBuffer } = ftModule
-  console.log('[upload-debug] fileTypeFromBuffer type:', typeof fileTypeFromBuffer)
-  console.log('[upload-debug] buffer length:', buffer?.length, 'first 8 bytes:', buffer?.slice(0, 8).toString('hex'))
+  const { fileTypeFromBuffer } = await import('file-type')
   const detected = await fileTypeFromBuffer(buffer)
-  console.log('[upload-debug] detected:', detected)
 
   if (!detected || !ALLOWED_IMAGE_MIME_TYPES.has(detected.mime)) {
-    console.log('[upload-debug] REJECTED — not in allowlist. detected:', detected)
     const err = new Error('Only JPEG, PNG and WebP images are allowed')
     err.status = 400
     throw err
   }
-  console.log('[upload-debug] ACCEPTED — mime:', detected.mime, 'ext:', detected.ext)
 
   // Re-encode to WebP — strips all metadata and normalises output format.
   // quality: 80 matches typical JPEG defaults while producing smaller files.
-  const safeBuffer = await sharp(buffer).webp({ quality: 80 }).toBuffer()
+  // Buffer.from() copies bytes out of sharp's WASM SharedArrayBuffer heap into a
+  // plain ArrayBuffer — required because AWS SDK v3 (@smithy/util-buffer-from)
+  // explicitly rejects SharedArrayBuffer when serialising the S3 request body.
+  const safeBuffer = Buffer.from(await sharp(buffer).webp({ quality: 80 }).toBuffer())
 
   const key = `uploads/${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`
   await s3.send(new PutObjectCommand({
@@ -360,9 +356,30 @@ router.post("/resolve", (req, res, next) => {
     try { await redis.del('reports:all'); } catch {}
 
     // TRUST-1 — +25 points for resolving a report
-    const reportOwner = await pool.query('SELECT user_id FROM reports WHERE id = $1', [report_id])
+    const reportOwner = await pool.query(
+      'SELECT user_id, hazard_type FROM reports WHERE id = $1',
+      [report_id]
+    )
     if (reportOwner.rows[0]?.user_id) {
       await updateTrustScore(pool, reportOwner.rows[0].user_id, 25)
+    }
+
+    // Notify the original reporter that their report has been resolved.
+    // user_id targets only the report owner; other users do not see this notification.
+    const ownerId   = reportOwner.rows[0]?.user_id   || null
+    const hazardType = reportOwner.rows[0]?.hazard_type || 'Hazard'
+    if (ownerId) {
+      pool.query(
+        `INSERT INTO notifications (title, message, severity, type, user_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        [
+          `✅ Your ${hazardType} report was resolved`,
+          `The ${hazardType} you reported has been marked as resolved by a community member`,
+          'low',
+          'resolved',
+          ownerId,
+        ]
+      ).catch(err => console.error('Resolution notification insert failed:', err.message))
     }
 
     res.json({ message: "Report resolved ✅", proofUrl: proof_url });

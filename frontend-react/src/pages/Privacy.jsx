@@ -85,7 +85,9 @@ export default function Privacy() {
             <ul>
               <li>Name and email address (required for registration)</li>
               <li>Password stored as a bcrypt hash — we never store plain-text passwords</li>
-              <li>Account role (citizen, municipality, admin)</li>
+              <li>Account role (user or admin)</li>
+              <li>Trust score and badge tier (earned through reporting and resolution activity)</li>
+              <li>Emergency contacts (name, phone, relation) — only if you choose to add them in your profile</li>
             </ul>
             <SubHeading>Report data</SubHeading>
             <ul>
@@ -97,8 +99,8 @@ export default function Privacy() {
             <SubHeading>Usage data</SubHeading>
             <ul>
               <li>IP address and browser user-agent (collected by rate-limiting middleware)</li>
-              <li>Pages visited and actions taken (via PostHog analytics — anonymised)</li>
-              <li>Error reports (via Sentry — no PII in stack traces)</li>
+              <li>Pages visited and actions taken — collected via PostHog analytics when enabled; stored using browser localStorage, not cookies</li>
+              <li>JavaScript error reports — collected via Sentry when enabled; we configure Sentry to exclude personally identifiable information from stack traces</li>
             </ul>
           </Section>
 
@@ -117,13 +119,13 @@ export default function Privacy() {
           <Section id="sharing" title="Data Sharing">
             <p>We only share your data with the following categories of recipients:</p>
             <ul>
-              <li><strong>Infrastructure providers</strong> — AWS S3 (photo storage), Render (backend hosting), Vercel (frontend hosting), Supabase/PostgreSQL (database)</li>
-              <li><strong>Email delivery</strong> — SendGrid, used exclusively to send OTP and notification emails</li>
-              <li><strong>Analytics</strong> — PostHog (EU-hosted, anonymised event data) and Sentry (error monitoring)</li>
-              <li><strong>Payments</strong> — Stripe processes all payment data; we never store card numbers</li>
-              <li><strong>Municipality partners</strong> — If you submit a report in a jurisdiction served by a municipality account, that municipality's staff can view the report content and location</li>
+              <li><strong>Infrastructure providers</strong> — AWS S3 (photo storage), Vercel (frontend hosting), Render (backend hosting), PostgreSQL (database)</li>
+              <li><strong>Email delivery</strong> — SendGrid, used exclusively to send OTP verification codes, password reset links, and contact-form responses</li>
+              <li><strong>Push notifications</strong> — Firebase Cloud Messaging (FCM), used to send hazard proximity alerts to opted-in devices</li>
+              <li><strong>Analytics</strong> — PostHog (page-view and interaction analytics, when enabled) and Sentry (error monitoring, when enabled)</li>
             </ul>
-            <p>Report locations and hazard types are visible to all authenticated users by design — this is the core function of the service. Your name and email are never shown publicly.</p>
+            <p>Project SAVE does <strong>not</strong> share report data with any government agency, municipality, or third-party authority. Reports are visible only to authenticated users of the SAVE platform — this is the core function of the service. Your email address is never displayed publicly; your display name is shown alongside your submitted reports.</p>
+            <p>Project SAVE has <strong>no payment functionality</strong>. We do not collect, process, or share any payment or financial information.</p>
           </Section>
 
           <Section id="storage" title="Storage & Security">
@@ -131,11 +133,11 @@ export default function Privacy() {
             <ul>
               <li>All data in transit encrypted via TLS 1.2+</li>
               <li>Passwords hashed with bcrypt (cost factor 12)</li>
-              <li>JWT tokens signed with RS256 asymmetric keys</li>
+              <li>JWT access tokens signed with HMAC-SHA256 (HS256), expire after 15 minutes</li>
+              <li>JWT access tokens invalidated on logout via a Redis-backed token blacklist</li>
               <li>CSRF protection on all state-changing routes</li>
               <li>XSS input sanitisation on all user-provided text</li>
               <li>Rate limiting on all API routes</li>
-              <li>JWT blacklist on logout (Redis-backed)</li>
             </ul>
             <p>We retain your account data for as long as your account is active. Deleted accounts are removed within 30 days. Anonymised report data may be retained indefinitely for aggregate statistics.</p>
           </Section>
@@ -157,9 +159,9 @@ export default function Privacy() {
           <Section id="cookies" title="Cookies">
             <p>We use a minimal set of cookies:</p>
             <ul>
-              <li><strong>CSRF token cookie</strong> — httpOnly, sameSite strict. Required for security. Cannot be disabled.</li>
-              <li><strong>Session preferences</strong> — localStorage only, not cookies. Stores UI preferences like cookie consent and install prompt dismissal.</li>
-              <li><strong>Analytics</strong> — PostHog may set a first-party cookie for session continuity. You can decline analytics cookies via our cookie banner.</li>
+              <li><strong>CSRF token cookie</strong> — httpOnly, sameSite strict/none (depending on environment). Required for security. Cannot be disabled.</li>
+              <li><strong>Session preferences</strong> — localStorage only, not cookies. Stores UI preferences such as cookie consent and install-prompt dismissal.</li>
+              <li><strong>Analytics</strong> — PostHog, when enabled, stores session data in <strong>browser localStorage</strong> (not cookies). You can decline analytics via our cookie banner; when declined, PostHog capturing is disabled.</li>
             </ul>
             <p>We do not use advertising cookies or third-party tracking pixels.</p>
           </Section>

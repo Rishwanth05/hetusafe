@@ -5,32 +5,38 @@ import Map from '../components/Map'
 import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
 import { io } from 'socket.io-client'
-
-const severityColor = {
-  low: { bg: '#dcfce7', text: '#16a34a' },
-  medium: { bg: '#fef9c3', text: '#ca8a04' },
-  high: { bg: '#fee2e2', text: '#dc2626' },
-  critical: { bg: '#f3e8ff', text: '#9333ea' },
-}
+import { Button, BottomNav, StatCard, Card, AppDrawer } from '../components/ui'
 
 const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
+
+/* ── Small helper ────────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [reports, setReports] = useState([])
-  const [loading, setLoading] = useState(true)
+
+  // ── All state from original (unchanged) ────────────────────────────────
+  const [reports, setReports]               = useState([])
+  const [loading, setLoading]               = useState(true)
   const [newReportFlash, setNewReportFlash] = useState(null)
   const socketRef = useRef(null)
 
-  // MAP4 — Radius filter
-  const [radiusKm, setRadiusKm] = useState(null)
+  const [radiusKm, setRadiusKm]         = useState(null)
   const [userLocation, setUserLocation] = useState(null)
 
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus]     = useState('all')
   const [filterSeverity, setFilterSeverity] = useState('all')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery]       = useState('')
 
+  const [menuOpen, setMenuOpen] = useState(false)
+  const navMenuRef = useRef(null)
+  // drawerRef added so clicks inside the drawer panel don't fire the
+  // navMenuRef outside-click handler and immediately close the drawer.
+  const drawerRef = useRef(null)
+
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // ── All useEffects from original (unchanged logic) ──────────────────────
   useEffect(() => {
     client.get('/reports/all')
       .then(({ data }) => {
@@ -50,29 +56,49 @@ export default function Dashboard() {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     socketRef.current = io(API_URL, { withCredentials: true })
 
-    socketRef.current.on('connect', () => {
-      console.log('🔌 Socket connected')
-    })
+    socketRef.current.on('connect', () => {})
 
     socketRef.current.on('new-report', (report) => {
       setReports(prev => {
-        // avoid duplicates
         if (prev.find(r => r.id === report.id)) return prev
         const updated = [report, ...prev].sort((a, b) =>
           (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4)
         )
         return updated
       })
-      // RT-2 — Flash notification for new report
       setNewReportFlash(report)
       setTimeout(() => setNewReportFlash(null), 5000)
     })
 
-    return () => {
-      socketRef.current?.disconnect()
-    }
+    return () => { socketRef.current?.disconnect() }
   }, [])
 
+  // Close nav menu on outside click — also checks drawerRef so clicks
+  // inside the open drawer panel don't immediately dismiss it.
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = (e) => {
+      const inHeader = navMenuRef.current?.contains(e.target)
+      const inDrawer = drawerRef.current?.contains(e.target)
+      if (!inHeader && !inDrawer) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menuOpen])
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const res = await client.get('/notifications/unread-count')
+        setUnreadCount(res.data.count)
+      } catch {}
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 20000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // ── All handlers from original (unchanged) ──────────────────────────────
   const handleLogout = () => {
     logout()
     navigate('/login')
@@ -89,14 +115,17 @@ export default function Dashboard() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   }
 
+  // These derived values are kept intact for potential re-use by
+  // other views (Results, Map) and the radius filter handler below.
   const filteredReports = radiusKm && userLocation
     ? reports.filter(r =>
-        getDistanceKm(userLocation.lat, userLocation.lng, parseFloat(r.latitude), parseFloat(r.longitude)) <= radiusKm
+        getDistanceKm(userLocation.lat, userLocation.lng,
+          parseFloat(r.latitude), parseFloat(r.longitude)) <= radiusKm
       )
     : reports
 
   const tableReports = filteredReports
-    .filter(r => filterStatus === 'all' || r.status === filterStatus)
+    .filter(r => filterStatus   === 'all' || r.status   === filterStatus)
     .filter(r => filterSeverity === 'all' || r.severity === filterSeverity)
     .filter(r => {
       if (!searchQuery) return true
@@ -119,324 +148,184 @@ export default function Dashboard() {
 
   const initials = (user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 
-  const [menuOpen, setMenuOpen] = useState(false)
-  const navMenuRef = useRef(null)
+  // ── Derived stats (from existing reports data — no new API calls) ───────
+  const resolvedCount = reports.filter(r => r.status === 'resolved').length
+  const activeCount   = reports.filter(r => r.status !== 'resolved').length
+  const rateStr = reports.length > 0
+    ? Math.round((resolvedCount / reports.length) * 100) + '%'
+    : '—'
 
-  useEffect(() => {
-    if (!menuOpen) return
-    const close = (e) => {
-      if (navMenuRef.current && !navMenuRef.current.contains(e.target)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [menuOpen])
+  // ── Drawer nav items ────────────────────────────────────────────────────
+  const menuItems = [
+    { label: 'Dashboard',     path: '/dashboard',   icon: '🏠' },
+    { label: 'Report Hazard', path: '/report',      icon: '📝' },
+    { label: 'View Map',      path: '/results',     icon: '🗺️' },
+    { label: 'Emergency',     path: '/emergency',   icon: '🚨' },
+    { label: 'Leaderboard',   path: '/leaderboard', icon: '🏆' },
+    { label: 'Contact',       path: '/contact',     icon: '📞' },
+    { label: 'Profile',       path: '/profile',     icon: '👤' },
+    ...(user?.role === 'admin'
+      ? [{ label: 'Admin', path: '/admin', icon: '⚙️' }]
+      : []),
+  ]
 
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  useEffect(() => {
-    const fetchUnread = async () => {
-      try {
-        const res = await client.get('/notifications/unread-count')
-        setUnreadCount(res.data.count)
-      } catch {}
-    }
-    fetchUnread()
-    const interval = setInterval(fetchUnread, 20000)
-    return () => clearInterval(interval)
-  }, [])
-
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div className="min-h-screen bg-canvas">
 
-      {/* RT-2 — New report flash toast */}
+      {/* RT-2 — Real-time flash toast (dark-theme restyled) */}
       {newReportFlash && (
-        <div style={{
-          position: 'fixed', top: '80px', right: '24px', zIndex: 9999,
-          background: '#fff', borderRadius: '12px', padding: '14px 18px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1.5px solid #bbf7d0',
-          display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '320px',
-          animation: 'slideIn 0.3s ease',
-        }}>
-          <style>{`@keyframes slideIn { from { opacity:0; transform:translateX(20px) } to { opacity:1; transform:translateX(0) } }`}</style>
-          <div style={{ fontSize: '24px' }}>🚨</div>
-          <div>
-            <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '13px', margin: '0 0 2px' }}>New report added</p>
-            <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>
+        <div
+          className="fixed top-16 right-4 z-[9999] bg-elevated border border-edge rounded-2xl px-4 py-3 max-w-xs w-[calc(100vw-2rem)] flex items-center gap-3 shadow-card"
+          style={{ animation: 'slideIn 0.3s ease' }}
+        >
+          <style>{`@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}`}</style>
+          <span className="text-2xl shrink-0" aria-hidden="true">🚨</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-body text-light font-bold">New report added</p>
+            <p className="text-caption text-muted truncate">
               {newReportFlash.hazard_type} — {newReportFlash.severity}
             </p>
           </div>
-          <button onClick={() => setNewReportFlash(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '16px', marginLeft: 'auto' }}>×</button>
+          <button
+            onClick={() => setNewReportFlash(null)}
+            aria-label="Dismiss notification"
+            className="text-muted hover:text-light shrink-0 text-lg leading-none ml-auto"
+          >
+            ×
+          </button>
         </div>
       )}
 
-      {/* Navbar */}
-      <nav style={{
-        background: '#fff', borderBottom: '1px solid #e2e8f0',
-        padding: '0 32px', height: '64px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, zIndex: 100,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}>
-        <style>{`
-          @media (max-width: 767px) { .save-nav-desktop { display: none !important; } }
-          @media (min-width: 768px) { .save-nav-hamburger { display: none !important; } }
-        `}</style>
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      {/*
+        --navbar-h consumed by NotificationCenter's mobile panel offset.
+        h-14 = 3.5rem = 56px.
+      */}
+      <header
+        ref={navMenuRef}
+        className="sticky top-0 z-40 bg-canvas/90 backdrop-blur-xl border-b border-edge"
+        style={{ '--navbar-h': '3.5rem' }}
+      >
+        <div className="flex items-center justify-between h-14 px-4 max-w-2xl mx-auto">
 
-        {/* Logo — always visible */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <svg width="32" height="32" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="16" fill="#16a34a"/>
-            <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
-            <path d="M22 28L26 32L34 24" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span style={{ fontWeight: '700', fontSize: '18px', color: '#0f172a' }}>Project SAVE</span>
-        </div>
-
-        {/* Desktop nav buttons — hidden below 768px */}
-        <div className="save-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => navigate('/report')} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            + Report Hazard
-          </button>
-          <button onClick={() => navigate('/results')} style={{ background: '#f0fdf4', color: '#16a34a', border: '1.5px solid #16a34a', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            View Reports
-          </button>
-          <button onClick={() => navigate('/emergency')} style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            🚨 Emergency
-          </button>
-          <button onClick={() => navigate('/leaderboard')} style={{ background: '#faf5ff', color: '#7c3aed', border: '1.5px solid #e9d5ff', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            🏆
-          </button>
-          <button onClick={() => navigate('/contact')} style={{ background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', cursor: 'pointer' }}>
-            Contact
-          </button>
-
-          <NotificationCenter externalCount={unreadCount} />
-
-          <button
-            onClick={() => navigate('/profile')}
-            style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#16a34a', color: '#fff', border: 'none', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(22,163,74,0.3)', transition: 'transform 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-            title={`${user?.name} — View Profile`}
-          >
-            {initials}
-          </button>
-
-          {user?.role === 'admin' && (
-            <button onClick={() => navigate('/admin')} style={{ background: '#1e293b', color: '#4ade80', border: '1.5px solid #334155', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
-              ⚙️ Admin
-            </button>
-          )}
-
-          <button onClick={handleLogout} style={{ background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 16px', fontSize: '14px', cursor: 'pointer' }}>
-            Logout
-          </button>
-        </div>
-
-        {/* Hamburger — visible only below 768px */}
-        <div ref={navMenuRef} className="save-nav-hamburger" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <NotificationCenter externalCount={unreadCount} />
+          {/* Hamburger */}
           <button
             onClick={() => setMenuOpen(o => !o)}
-            aria-label="Toggle navigation menu"
-            style={{ background: 'none', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', fontSize: '20px', lineHeight: 1, color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={menuOpen}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-muted hover:text-light hover:bg-elevated transition-colors shrink-0"
           >
-            {menuOpen ? '✕' : '☰'}
+            {menuOpen
+              ? <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              : <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            }
           </button>
 
-          {menuOpen && (
-            <div style={{
-              position: 'fixed', top: '64px', left: 0, right: 0,
-              background: '#fff', borderBottom: '1px solid #e2e8f0',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
-              zIndex: 99, display: 'flex', flexDirection: 'column',
-            }}>
-              {[
-                { label: '📊 Dashboard',      path: '/dashboard',  color: '#0f172a', weight: '500' },
-                { label: '+ Report Hazard',   path: '/report',     color: '#16a34a', weight: '700' },
-                { label: '📋 View Reports',   path: '/results',    color: '#0f172a', weight: '500' },
-                { label: '🚨 Emergency',      path: '/emergency',  color: '#dc2626', weight: '600' },
-                { label: '🏆 Leaderboard',    path: '/leaderboard',color: '#7c3aed', weight: '500' },
-                { label: '📞 Contact',        path: '/contact',    color: '#64748b', weight: '500' },
-                { label: '👤 Profile',        path: '/profile',    color: '#0f172a', weight: '500' },
-                ...(user?.role === 'admin'
-                  ? [{ label: '⚙️ Admin', path: '/admin', color: '#16a34a', weight: '700' }]
-                  : []),
-              ].map(({ label, path, color, weight }) => (
-                <button
-                  key={path}
-                  onClick={() => { navigate(path); setMenuOpen(false) }}
-                  style={{ background: 'none', border: 'none', borderBottom: '1px solid #f1f5f9', padding: '16px 24px', fontSize: '15px', fontWeight: weight, color, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}
-                >
-                  {label}
-                </button>
-              ))}
-              <button
-                onClick={() => { handleLogout(); setMenuOpen(false) }}
-                style={{ background: '#fef2f2', border: 'none', padding: '16px 24px', fontSize: '15px', fontWeight: '600', color: '#dc2626', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}
-              >
-                🚪 Logout
-              </button>
-            </div>
-          )}
-        </div>
-      </nav>
-
-      {/* Map — MAP1 clustering + MAP2 heatmap toggle */}
-      <div style={{ height: '480px', width: '100%' }}>
-        {loading ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTopColor: '#16a34a', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
-              <p style={{ color: '#64748b' }}>Loading map…</p>
-            </div>
-            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          {/* Logo + title */}
+          <div className="flex items-center gap-2">
+            <svg width="26" height="26" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+              <rect width="56" height="56" rx="16" fill="#22C55E"/>
+              <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
+              <path d="M22 28L26 32L34 24" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="text-[17px] font-bold text-light tracking-tight">Project SAVE</span>
           </div>
-        ) : (
-          <Map reports={filteredReports} zoom={5} showHeatmapToggle={true} />
-        )}
-      </div>
 
-      {/* MAP4 — Radius filter bar */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>📍 Show reports within:</span>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {[null, 1, 5, 10, 25].map(km => (
-            <button
-              key={km}
-              onClick={() => handleRadiusChange(km)}
-              style={{
-                padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
-                fontWeight: '600', cursor: 'pointer', border: 'none',
-                background: radiusKm === km ? '#16a34a' : '#f1f5f9',
-                color: radiusKm === km ? '#fff' : '#64748b',
-                transition: 'all 0.15s',
-              }}
-            >
-              {km ? `${km}km` : 'All'}
-            </button>
-          ))}
+          {/* Notification bell (existing component — unchanged) */}
+          <NotificationCenter externalCount={unreadCount} />
         </div>
-        {radiusKm && (
-          <span style={{ fontSize: '12px', color: '#64748b' }}>
-            Showing {filteredReports.length} of {reports.length} reports
+      </header>
+
+      {/* ── Side drawer (shared AppDrawer component) ────────────────────── */}
+      <AppDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        drawerRef={drawerRef}
+      />
+
+      {/* ── Main scrollable content ─────────────────────────────────────── */}
+      {/*
+        pb-[calc(4rem+env(safe-area-inset-bottom))] ensures the last visible
+        content clears the fixed BottomNav bar plus the iOS home-indicator zone.
+        (Flagged as required page-level concern in the Stage 2 hardening pass.)
+      */}
+      <main className="max-w-2xl mx-auto px-4 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+
+        {/* Tagline pill */}
+        <div className="mt-8 mb-5">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-caption font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" aria-hidden="true" />
+            Live. Local. Together.
           </span>
-        )}
-      </div>
-
-      {/* Stats */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
-          {[
-            { label: 'Total Reports', value: filteredReports.length, color: '#0f172a' },
-            { label: 'Critical', value: filteredReports.filter(r => r.severity === 'critical').length, color: '#9333ea' },
-            { label: 'High', value: filteredReports.filter(r => r.severity === 'high').length, color: '#dc2626' },
-            { label: 'Medium', value: filteredReports.filter(r => r.severity === 'medium').length, color: '#ca8a04' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', textAlign: 'center' }}>
-              <p style={{ fontSize: '32px', fontWeight: '700', color }}>{value}</p>
-              <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>{label}</p>
-            </div>
-          ))}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a' }}>
-            Recent Reports <span style={{ color: '#64748b', fontWeight: '400' }}>({filteredReports.length})</span>
-          </h2>
-          <button onClick={() => navigate('/results')} style={{ background: 'transparent', color: '#16a34a', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer', textDecoration: 'underline' }}>
-            View all →
-          </button>
+        {/* Hero heading — text-hero = 2rem/700/−0.02em tracking (from tailwind.config.js) */}
+        <h1 className="text-hero text-light mb-3">
+          Together, We Keep<br />
+          Our City Safe
+        </h1>
+        <p className="text-body text-muted mb-8 max-w-sm">
+          Report community hazards, track resolutions, and make your neighbourhood
+          safer — in real time.
+        </p>
+
+        {/* CTA buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-10">
+          <Button
+            variant="primary"
+            className="w-full sm:flex-1"
+            onClick={() => navigate('/report')}
+          >
+            Report a Hazard
+            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 shrink-0" aria-hidden="true">
+              <path d="M5 12h14M12 5l7 7-7 7"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full sm:flex-1"
+            onClick={() => navigate('/results', { state: { view: 'map' } })}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 shrink-0" aria-hidden="true">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            View Live Map
+          </Button>
         </div>
 
-        {/* Filter bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', color: '#374151', cursor: 'pointer', outline: 'none' }}
-            >
-              <option value="all">All</option>
-              <option value="active">active</option>
-              <option value="resolved">resolved</option>
-            </select>
-            <select
-              value={filterSeverity}
-              onChange={e => setFilterSeverity(e.target.value)}
-              style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', color: '#374151', cursor: 'pointer', outline: 'none' }}
-            >
-              <option value="all">All</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
-          <input
-            type="text"
-            placeholder="Search type or description..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', color: '#374151', outline: 'none', width: '240px' }}
+        {/* Stat grid
+            2 cols on ≤639px (each card ≈(375−12)/2 = 181px → fits comfortably).
+            4 cols on sm+ (640px+).
+            Values come from the existing `reports` state — no new API calls. */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+          <StatCard
+            value={loading ? '…' : String(reports.length)}
+            label="Reports"
+          />
+          <StatCard
+            value={loading ? '…' : String(activeCount)}
+            label="Active"
+            accent="text-warn"
+          />
+          <StatCard
+            value={loading ? '…' : String(resolvedCount)}
+            label="Resolved"
+            accent="text-accent"
+          />
+          <StatCard
+            value={loading ? '…' : rateStr}
+            label="Rate"
+            accent="text-glow"
           />
         </div>
 
-        {/* Reports table */}
-        <div style={{ overflowX: 'auto', paddingBottom: '32px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                {['Status', 'Type', 'ID', 'Date', 'Description', 'Reported By', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tableReports.map(r => {
-                const badge = {
-                  critical: { bg: '#7c3aed', color: '#fff' },
-                  high:     { bg: '#fee2e2', color: '#dc2626' },
-                  medium:   { bg: '#fef3c7', color: '#d97706' },
-                  low:      { bg: '#dcfce7', color: '#16a34a' },
-                }[r.severity] || { bg: '#f3f4f6', color: '#6b7280' }
-                return (
-                  <tr key={r.id}
-                    style={{ borderBottom: '1px solid #f3f4f6' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}
-                  >
-                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                      <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: '600', background: badge.bg, color: badge.color }}>
-                        {r.severity.charAt(0).toUpperCase() + r.severity.slice(1)}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#111827', fontWeight: '500' }}>{r.hazard_type}</td>
-                    <td style={{ padding: '14px 16px', color: '#6b7280', whiteSpace: 'nowrap' }}>{'RS' + String(r.id).padStart(3, '0')}</td>
-                    <td style={{ padding: '14px 16px', color: '#6b7280', whiteSpace: 'nowrap' }}>
-                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#374151', maxWidth: '240px' }}>
-                      {r.description ? (r.description.length > 40 ? r.description.slice(0, 40) + '...' : r.description) : '—'}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#6b7280' }}>{r.name || '—'}</td>
-                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                      <button
-                        onClick={() => navigate('/results')}
-                        style={{ background: 'none', border: 'none', color: '#16a34a', fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}
-                      >
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </main>
+
+      {/* Fixed bottom navigation */}
+      <BottomNav />
     </div>
   )
 }
