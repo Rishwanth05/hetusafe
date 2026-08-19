@@ -6,7 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "test": "node --experimental-vm-modules ./node_modules/.bin/jest --runInBand",
+    "test:coverage": "node --experimental-vm-modules ./node_modules/.bin/jest --runInBand --coverage"
   },
   "keywords": [],
   "author": "",
@@ -39,6 +41,8 @@
     "zod": "^4.4.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "jest": "^30.4.2",
+    "nodemon": "^3.1.11",
+    "supertest": "^7.2.2"
   }
 }
