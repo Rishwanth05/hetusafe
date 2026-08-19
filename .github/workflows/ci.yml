@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# job: test
+# Spins up real Postgres + Redis service containers (same images as
+# docker-compose.yml), loads the full schema, and runs `npm test`.
+# All env vars here are test-only values — no real secrets are needed.
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: project_save
+          POSTGRES_USER: save_user
+          # Ephemeral CI container — simple password is fine here.
+          POSTGRES_PASSWORD: ci_postgres_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U save_user -d project_save"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # These are set BEFORE loadEnv.js / globalSetup.js run, so they take
+    # priority over the values in the committed .env.test file (dotenv
+    # never overwrites existing process env vars).
+    env:
+      NODE_ENV: test
+      DB_DEV_URL: postgresql://save_user:ci_postgres_pass@localhost:5432/save_test
+      JWT_SECRET: ci-test-jwt-secret-32-characters-ok
+      CSRF_SECRET: ci-test-csrf-secret-32-characters-ok
+      REDIS_URL: redis://localhost:6379/1
+      FRONTEND_URL: http://localhost:5173
+      # SendGrid and Firebase are fully mocked in jest.config.js moduleNameMapper
+      # — these values are never used but must be present so dotenv doesn't warn.
+      SENDGRID_API_KEY: SG.fake-ci-key
+      SENDGRID_FROM: noreply@ci.test
+      GOOGLE_APPLICATION_CREDENTIALS_JSON: '{}'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      # ── Schema setup ────────────────────────────────────────────────────────
+      # schema.sql contains \restrict / \unrestrict metacommands left over from
+      # the pg_dump process. psql emits warnings for unknown metacommands but
+      # continues executing and exits 0 if the SQL itself succeeds — safe to use.
+
+      - name: Create save_test database
+        env:
+          PGPASSWORD: ci_postgres_pass
+        run: psql -h localhost -U save_user -d project_save -c "CREATE DATABASE save_test;"
+
+      - name: Load base schema into save_test
+        env:
+          PGPASSWORD: ci_postgres_pass
+        run: psql -h localhost -U save_user -d save_test -f backend/migrations/schema.sql
+
+      - name: Run incremental migrations
+        env:
+          PGPASSWORD: ci_postgres_pass
+        # Explicit order mirrors the sequence applied to the live database.
+        # All files use IF NOT EXISTS / ADD COLUMN IF NOT EXISTS so they are
+        # idempotent on top of schema.sql.
+        run: |
+          for f in \
+            backend/migrations/sprint_week1_security.sql \
+            backend/migrations/week4_audit_log.sql \
+            backend/migrations/week4_deletion_comments.sql \
+            backend/migrations/week5_fcm_tokens.sql \
+            backend/migrations/week5_master_data.sql \
+            backend/migrations/week5_notifications_soft_delete.sql \
+            backend/migrations/week5_refresh_tokens.sql \
+            backend/migrations/week5_user_location.sql \
+            backend/migrations/week6_notifications_per_user.sql \
+            backend/migrations/resolution_votes.sql; do
+            echo "→ $f"
+            psql -h localhost -U save_user -d save_test -f "$f"
+          done
+
+      - name: Run tests
+        run: npm test
+        working-directory: backend
+
+# ─────────────────────────────────────────────────────────────────────────────
+# job: build
+# Only runs after `test` passes. Verifies backend deps install cleanly
+# (no build step in package.json — plain Node/Express server) and that
+# the Vite frontend produces a dist/ bundle without errors.
+# VITE_* vars are set to empty strings — esbuild doesn't type-check so
+# the bundle compiles fine; runtime correctness is not the goal here.
+# ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend-react/package-lock.json
+
+      # Backend has no build/compile step — npm ci confirms the dependency
+      # tree is intact and lockfile is consistent.
+      - name: Backend — verify dependencies install cleanly
+        run: npm ci
+        working-directory: backend
+
+      - name: Frontend — install dependencies
+        run: npm ci
+        working-directory: frontend-react
+
+      - name: Frontend — build
+        env:
+          VITE_API_URL: ''
+          VITE_FIREBASE_API_KEY: ''
+          VITE_FIREBASE_AUTH_DOMAIN: ''
+          VITE_FIREBASE_PROJECT_ID: ''
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ''
+          VITE_FIREBASE_APP_ID: ''
+          VITE_FIREBASE_VAPID_KEY: ''
+          VITE_POSTHOG_HOST: ''
+          VITE_POSTHOG_KEY: ''
+          VITE_SENTRY_DSN: ''
+        run: npm run build
+        working-directory: frontend-react
