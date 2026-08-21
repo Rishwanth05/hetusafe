@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { readdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 
 export default defineConfig({
   plugins: [
@@ -57,6 +59,21 @@ export default defineConfig({
         filesToDeleteAfterUpload: ['./dist/**/*.map'],
       },
     }),
+
+    {
+      name: 'delete-sourcemaps',
+      enforce: 'post',
+      closeBundle() {
+        const walk = (dir) => {
+          for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            const full = join(dir, entry.name)
+            if (entry.isDirectory()) walk(full)
+            else if (entry.name.endsWith('.map')) rmSync(full)
+          }
+        }
+        walk('dist')
+      },
+    },
   ],
 
   build: {
