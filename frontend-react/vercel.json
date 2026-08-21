@@ -1,13 +1,10 @@
 {
   "rewrites": [
-    {
-      "source": "/sitemap.xml",
-      "destination": "/sitemap.xml"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/sitemap.xml",      "destination": "/sitemap.xml" },
+    { "source": "/sw.js",            "destination": "/sw.js" },
+    { "source": "/workbox-:hash.js", "destination": "/workbox-:hash.js" },
+    { "source": "/registerSW.js",    "destination": "/registerSW.js" },
+    { "source": "/(.*)",             "destination": "/index.html" }
   ],
   "headers": [
     {
