@@ -60,7 +60,7 @@ export default function InstallPrompt() {
 
       <div style={{ flex: 1 }}>
         <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px' }}>
-          Install Project SAVE
+          Install Hetusafe
         </p>
         <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>
           Add to home screen for quick access

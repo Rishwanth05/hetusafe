@@ -11,10 +11,10 @@ function generateOTP() {
 
 async function sendOTPEmail(toEmail, otp, purpose = 'verify') {
   const subjects = {
-    verify: 'Project SAVE — Verify your email',
-    login: 'Project SAVE — Your login OTP',
-    delete: 'Project SAVE — Confirm account deletion',
-    lockout: 'Project SAVE — Account locked',
+    verify: 'Hetusafe — Verify your email',
+    login: 'Hetusafe — Your login OTP',
+    delete: 'Hetusafe — Confirm account deletion',
+    lockout: 'Hetusafe — Account locked',
   };
 
   const intros = {
@@ -48,7 +48,7 @@ async function sendOTPEmail(toEmail, otp, purpose = 'verify') {
     html: `
       <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:12px">
         <div style="background:#16a34a;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
-          <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800">🛡️ Project SAVE</h1>
+          <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800">🛡️ Hetusafe</h1>
         </div>
         <p style="color:#0f172a;font-size:16px;margin-bottom:8px">${intros[purpose]}</p>
         ${body}
@@ -64,11 +64,11 @@ async function sendResetEmail(toEmail, resetLink) {
   const msg = {
     to: toEmail,
     from: FROM,
-    subject: 'Project SAVE — Reset your password',
+    subject: 'Hetusafe — Reset your password',
     html: `
       <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:12px">
         <div style="background:#16a34a;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
-          <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800">🛡️ Project SAVE</h1>
+          <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800">🛡️ Hetusafe</h1>
         </div>
         <p style="color:#0f172a;font-size:16px;margin-bottom:8px">You requested a password reset.</p>
         <div style="background:#fff;border:2px solid #e2e8f0;border-radius:10px;padding:24px;text-align:center;margin:20px 0">

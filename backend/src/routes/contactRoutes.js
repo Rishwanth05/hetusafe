@@ -33,7 +33,7 @@ router.post("/send", async (req, res) => {
     }
 
     const safeSubject = subject.trim() || "New message";
-    const finalSubject = `Project SAVE Contact: ${safeSubject}`;
+    const finalSubject = `Hetusafe Contact: ${safeSubject}`;
 
     const textBody =
       `Name: ${name}\n` +
@@ -55,7 +55,7 @@ router.post("/send", async (req, res) => {
       text: textBody,
       html: `
         <div style="font-family: Arial, sans-serif; line-height:1.5">
-          <h2 style="margin:0 0 10px">Project SAVE Contact Message</h2>
+          <h2 style="margin:0 0 10px">Hetusafe Contact Message</h2>
           <p><b>Name:</b> ${name}</p>
           <p><b>Email:</b> ${email}</p>
           <p><b>Subject:</b> ${safeSubject}</p>
