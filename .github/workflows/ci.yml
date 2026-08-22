@@ -21,14 +21,14 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_DB: project_save
+          POSTGRES_DB: hetusafe
           POSTGRES_USER: save_user
           # Ephemeral CI container — simple password is fine here.
           POSTGRES_PASSWORD: ci_postgres_pass
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U save_user -d project_save"
+          --health-cmd "pg_isready -U save_user -d hetusafe"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -48,7 +48,7 @@ jobs:
     # never overwrites existing process env vars).
     env:
       NODE_ENV: test
-      DB_DEV_URL: postgresql://save_user:ci_postgres_pass@localhost:5432/save_test
+      DB_DEV_URL: postgresql://save_user:ci_postgres_pass@localhost:5432/hetusafe_test
       JWT_SECRET: ci-test-jwt-secret-32-characters-ok
       CSRF_SECRET: ci-test-csrf-secret-32-characters-ok
       REDIS_URL: redis://localhost:6379/1
@@ -78,15 +78,15 @@ jobs:
       # the pg_dump process. psql emits warnings for unknown metacommands but
       # continues executing and exits 0 if the SQL itself succeeds — safe to use.
 
-      - name: Create save_test database
+      - name: Create hetusafe_test database
         env:
           PGPASSWORD: ci_postgres_pass
-        run: psql -h localhost -U save_user -d project_save -c "CREATE DATABASE save_test;"
+        run: psql -h localhost -U save_user -d hetusafe -c "CREATE DATABASE hetusafe_test;"
 
-      - name: Load base schema into save_test
+      - name: Load base schema into hetusafe_test
         env:
           PGPASSWORD: ci_postgres_pass
-        run: psql -h localhost -U save_user -d save_test -f backend/migrations/schema.sql
+        run: psql -h localhost -U save_user -d hetusafe_test -f backend/migrations/schema.sql
 
       - name: Run incremental migrations
         env:
@@ -107,7 +107,7 @@ jobs:
             backend/migrations/week6_notifications_per_user.sql \
             backend/migrations/resolution_votes.sql; do
             echo "→ $f"
-            psql -h localhost -U save_user -d save_test -f "$f"
+            psql -h localhost -U save_user -d hetusafe_test -f "$f"
           done
 
       - name: Run tests

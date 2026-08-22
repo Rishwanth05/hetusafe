@@ -1,4 +1,4 @@
-# Project SAVE — Safety Alert & Visibility Engine
+# Hetusafe — Safety Alert & Visibility Engine
 
 ![CI](https://github.com/Rishwanth05/project_save/actions/workflows/ci.yml/badge.svg)
 
@@ -133,7 +133,7 @@ This starts `save_postgres` (port 5432) and `save_redis` (port 6379) using the c
 
 ```bash
 # Run from the repo root
-PGPASSWORD=<your-db-pass> psql -h localhost -U save_user -d project_save \
+PGPASSWORD=<your-db-pass> psql -h localhost -U save_user -d hetusafe \
   -f backend/migrations/schema.sql
 
 # Then run each migration in order:
@@ -147,7 +147,7 @@ for f in backend/migrations/sprint_week1_security.sql \
           backend/migrations/week5_user_location.sql \
           backend/migrations/week6_notifications_per_user.sql \
           backend/migrations/resolution_votes.sql; do
-  PGPASSWORD=<your-db-pass> psql -h localhost -U save_user -d project_save -f "$f"
+  PGPASSWORD=<your-db-pass> psql -h localhost -U save_user -d hetusafe -f "$f"
 done
 ```
 
@@ -160,7 +160,7 @@ Create `backend/.env` (never commit this file):
 PORT=5000
 
 # Database — local Docker
-DB_DEV_URL=postgresql://save_user:<password>@localhost:5432/project_save
+DB_DEV_URL=postgresql://save_user:<password>@localhost:5432/hetusafe
 
 # Database — Render production (leave blank for local dev)
 DB_PROD_URL=

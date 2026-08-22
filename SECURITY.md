@@ -2,7 +2,7 @@
 
 ## Scope
 
-Project SAVE handles real user data including GPS coordinates, photographs, and account credentials. We take vulnerability reports seriously and appreciate responsible disclosure.
+Hetusafe handles real user data including GPS coordinates, photographs, and account credentials. We take vulnerability reports seriously and appreciate responsible disclosure.
 
 ## Reporting a Vulnerability
 
