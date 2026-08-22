@@ -128,7 +128,7 @@ function SuccessScreen({ form, address, submittedId, navigate }) {
 
       <h1 className="text-hero text-light text-center mb-2">Thank You!</h1>
       <p className="text-body text-muted text-center mb-8 max-w-xs">
-        Your hazard report has been submitted to the SAVE community.
+        Your hazard report has been submitted to the Hetusafe community.
       </p>
 
       {/* Report summary */}

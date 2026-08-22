@@ -23,7 +23,7 @@ const SAFETY_TIPS = [
   },
   {
     type: 'Fallen Tree / Road Damage', icon: '🌳', color: '#22c55e',
-    steps: ['Do not attempt to move large debris', 'Set up warning signals if safe', 'Report via Project SAVE immediately', 'Reroute traffic if possible', 'Call local municipality'],
+    steps: ['Do not attempt to move large debris', 'Set up warning signals if safe', 'Report via Hetusafe immediately', 'Reroute traffic if possible', 'Call local municipality'],
   },
   {
     type: 'Exposed Wire', icon: '⚡', color: '#f59e0b',
@@ -31,7 +31,7 @@ const SAFETY_TIPS = [
   },
   {
     type: 'Pothole / Road Hazard', icon: '🚧', color: '#a78bfa',
-    steps: ['Slow down and navigate carefully', 'Turn on hazard lights if stopping', 'Report via Project SAVE', 'Call local road maintenance', 'Document with photo if safe'],
+    steps: ['Slow down and navigate carefully', 'Turn on hazard lights if stopping', 'Report via Hetusafe', 'Call local road maintenance', 'Document with photo if safe'],
   },
 ]
 

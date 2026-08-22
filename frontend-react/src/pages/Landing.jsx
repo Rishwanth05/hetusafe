@@ -318,7 +318,7 @@ export default function Landing() {
             <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
             <path d="M22 28L26 32L34 24" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontWeight: '800', fontSize: '18px', letterSpacing: '-0.3px' }}>Project SAVE</span>
+          <span style={{ fontWeight: '800', fontSize: '18px', letterSpacing: '-0.3px' }}>Hetusafe</span>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {user ? (
@@ -391,7 +391,7 @@ export default function Landing() {
             fontSize: 'clamp(16px, 2.5vw, 20px)', color: '#94a3b8', maxWidth: '560px',
             margin: '0 auto 40px', lineHeight: '1.7', fontWeight: '400',
           }}>
-            Project SAVE lets anyone report street hazards in 60 seconds.
+            Hetusafe lets anyone report street hazards in 60 seconds.
             Real-time map, photo proof, and track resolution progress in real time —
             so problems get fixed, not forgotten.
           </p>
@@ -577,7 +577,7 @@ export default function Landing() {
             Ready to make your<br/>neighbourhood safer?
           </h2>
           <p style={{ color: '#64748b', fontSize: '17px', marginBottom: '36px', lineHeight: '1.7' }}>
-            Join thousands of residents already reporting hazards, holding cities accountable, and seeing real results.
+            Join your neighbours in reporting hazards, holding cities accountable, and seeing real results.
           </p>
           <button onClick={() => navigate(user ? '/report' : '/signup')} style={{
             ...btnStyle('#16a34a'),
@@ -601,7 +601,7 @@ export default function Landing() {
             <rect width="56" height="56" rx="14" fill="#16a34a"/>
             <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
           </svg>
-          <span style={{ fontWeight: '700', fontSize: '14px' }}>Project SAVE</span>
+          <span style={{ fontWeight: '700', fontSize: '14px' }}>Hetusafe</span>
           <span style={{ color: '#334155', margin: '0 6px' }}>·</span>
           <span style={{ color: '#475569', fontSize: '13px' }}>Safety Alert &amp; Visibility Engine</span>
         </div>
@@ -615,7 +615,7 @@ export default function Landing() {
           ))}
         </div>
         <p style={{ color: '#334155', fontSize: '12px', width: '100%', textAlign: 'center', marginTop: '8px' }}>
-          © 2026 Project SAVE. Built for communities, by communities.
+          © 2026 Hetusafe. Built for communities, by communities.
         </p>
       </footer>
 

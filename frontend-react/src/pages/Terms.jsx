@@ -40,7 +40,7 @@ export default function Terms() {
             <rect width="56" height="56" rx="12" fill="#16a34a"/>
             <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
           </svg>
-          <span style={{ fontWeight: '700', fontSize: '15px' }}>Project SAVE</span>
+          <span style={{ fontWeight: '700', fontSize: '15px' }}>Hetusafe</span>
         </button>
         <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 14px', color: '#94a3b8', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
       </div>
@@ -75,19 +75,19 @@ export default function Terms() {
           </div>
 
           <Section id="acceptance" title="Acceptance of Terms">
-            <p>By creating an account or using Project SAVE ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Service.</p>
-            <p>These Terms constitute a legally binding agreement between you and Project SAVE. We reserve the right to update these Terms at any time. Continued use after changes constitutes acceptance.</p>
+            <p>By creating an account or using Hetusafe ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Service.</p>
+            <p>These Terms constitute a legally binding agreement between you and Hetusafe. We reserve the right to update these Terms at any time. Continued use after changes constitutes acceptance.</p>
           </Section>
 
           <Section id="service" title="Description of Service">
-            <p>Project SAVE is a community hazard reporting platform that allows residents to:</p>
+            <p>Hetusafe is a community hazard reporting platform that allows residents to:</p>
             <ul>
               <li>Submit geo-tagged reports of public safety hazards</li>
               <li>View hazard reports on an interactive map</li>
               <li>Track the resolution status of submitted reports</li>
               <li>Receive notifications about hazards in their area</li>
             </ul>
-            <p>The Service is provided "as is." We do not guarantee reports will be acted upon by any government authority. Project SAVE is not a substitute for emergency services — call 911 for life-threatening emergencies.</p>
+            <p>The Service is provided "as is." We do not guarantee reports will be acted upon by any government authority. Hetusafe is not a substitute for emergency services — call 911 for life-threatening emergencies.</p>
             <Callout>🚨 In case of an emergency, call 911 immediately. Do not submit a report as a substitute for emergency services.</Callout>
           </Section>
 
@@ -106,7 +106,7 @@ export default function Terms() {
             <p>When you submit a report, photo, or any other content to the Service ("User Content"), you:</p>
             <ul>
               <li>Retain ownership of your content</li>
-              <li>Grant Project SAVE a worldwide, non-exclusive, royalty-free licence to store, display, and distribute your content as part of operating the Service</li>
+              <li>Grant Hetusafe a worldwide, non-exclusive, royalty-free licence to store, display, and distribute your content as part of operating the Service</li>
               <li>Confirm the content is accurate to the best of your knowledge</li>
               <li>Accept that report locations and hazard descriptions are visible to other authenticated users and municipality partners</li>
             </ul>
@@ -129,18 +129,18 @@ export default function Terms() {
               <li>Attempt to gain unauthorised access to the Service or its infrastructure</li>
               <li>Use automated bots, scrapers, or scripts without prior written consent</li>
               <li>Circumvent security features, rate limits, or access controls</li>
-              <li>Impersonate government officials, municipality workers, or Project SAVE staff</li>
+              <li>Impersonate government officials, municipality workers, or Hetusafe staff</li>
               <li>Upload content containing malware, viruses, or malicious code</li>
             </ul>
             <p>Violations may result in immediate account termination and, where applicable, reporting to law enforcement.</p>
           </Section>
 
           <Section id="payments" title="Pricing">
-            <p>Project SAVE is currently free to use. There are no paid tiers at this time. Contact us at arishwanthreddy@gmail.com with any questions.</p>
+            <p>Hetusafe is currently free to use. There are no paid tiers at this time. Contact us at arishwanthreddy@gmail.com with any questions.</p>
           </Section>
 
           <Section id="liability" title="Limitation of Liability">
-            <p>To the maximum extent permitted by law, Project SAVE and its operators shall not be liable for:</p>
+            <p>To the maximum extent permitted by law, Hetusafe and its operators shall not be liable for:</p>
             <ul>
               <li>Indirect, incidental, special, or consequential damages</li>
               <li>Loss of profits, data, goodwill, or other intangible losses</li>
@@ -149,7 +149,7 @@ export default function Terms() {
               <li>Service interruptions, data loss, or security breaches beyond our reasonable control</li>
             </ul>
             <p>To the maximum extent permitted by applicable law, our total cumulative liability for any claim shall not exceed $100 USD. As the Service is currently provided free of charge, no other payment-based cap applies.</p>
-            <p>Project SAVE does not guarantee the accuracy, completeness, or timeliness of any report. The Service is informational only.</p>
+            <p>Hetusafe does not guarantee the accuracy, completeness, or timeliness of any report. The Service is informational only.</p>
           </Section>
 
           <Section id="termination" title="Termination">
@@ -165,7 +165,7 @@ export default function Terms() {
           <Section id="contact" title="Contact">
             <p>For questions about these Terms:</p>
             <ul>
-              <li><strong>Email:</strong> legal@saveapp.digital</li>
+              <li><strong>Email:</strong> legal@hetusafe.com</li>
               <li><strong>Response time:</strong> Within 5 business days</li>
             </ul>
           </Section>

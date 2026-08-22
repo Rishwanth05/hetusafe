@@ -40,7 +40,7 @@ export default function Privacy() {
             <rect width="56" height="56" rx="12" fill="#16a34a"/>
             <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
           </svg>
-          <span style={{ fontWeight: '700', fontSize: '15px' }}>Project SAVE</span>
+          <span style={{ fontWeight: '700', fontSize: '15px' }}>Hetusafe</span>
         </button>
         <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 14px', color: '#94a3b8', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
       </div>
@@ -75,8 +75,8 @@ export default function Privacy() {
           </div>
 
           <Section id="overview" title="Overview">
-            <p>Project SAVE ("we", "our", or "us") operates the Project SAVE web application accessible at <strong>saveapp.digital</strong>. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our service.</p>
-            <p>By using Project SAVE, you agree to the practices described in this policy. If you do not agree, please do not use our service.</p>
+            <p>Hetusafe ("we", "our", or "us") operates the Hetusafe web application accessible at <strong>hetusafe.com</strong>. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our service.</p>
+            <p>By using Hetusafe, you agree to the practices described in this policy. If you do not agree, please do not use our service.</p>
           </Section>
 
           <Section id="data-collected" title="Data We Collect">
@@ -105,7 +105,7 @@ export default function Privacy() {
           </Section>
 
           <Section id="how-we-use" title="How We Use It">
-            <p>We use collected data solely to operate and improve Project SAVE:</p>
+            <p>We use collected data solely to operate and improve Hetusafe:</p>
             <ul>
               <li><strong>To provide the service</strong> — display reports on the map, send OTP emails, manage account status</li>
               <li><strong>To communicate with you</strong> — status update notifications, security alerts, OTP codes</li>
@@ -124,8 +124,8 @@ export default function Privacy() {
               <li><strong>Push notifications</strong> — Firebase Cloud Messaging (FCM), used to send hazard proximity alerts to opted-in devices</li>
               <li><strong>Analytics</strong> — PostHog (page-view and interaction analytics, when enabled) and Sentry (error monitoring, when enabled)</li>
             </ul>
-            <p>Project SAVE does <strong>not</strong> share report data with any government agency, municipality, or third-party authority. Reports are visible only to authenticated users of the SAVE platform — this is the core function of the service. Your email address is never displayed publicly; your display name is shown alongside your submitted reports.</p>
-            <p>Project SAVE has <strong>no payment functionality</strong>. We do not collect, process, or share any payment or financial information.</p>
+            <p>Hetusafe does <strong>not</strong> share report data with any government agency, municipality, or third-party authority. Reports are visible only to authenticated users of the Hetusafe platform — this is the core function of the service. Your email address is never displayed publicly; your display name is shown alongside your submitted reports.</p>
+            <p>Hetusafe has <strong>no payment functionality</strong>. We do not collect, process, or share any payment or financial information.</p>
           </Section>
 
           <Section id="storage" title="Storage & Security">
@@ -167,7 +167,7 @@ export default function Privacy() {
           </Section>
 
           <Section id="children" title="Children">
-            <p>Project SAVE is not directed at children under 13 years of age. We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please contact us and we will delete it promptly.</p>
+            <p>Hetusafe is not directed at children under 13 years of age. We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please contact us and we will delete it promptly.</p>
           </Section>
 
           <Section id="changes" title="Policy Changes">
@@ -181,7 +181,7 @@ export default function Privacy() {
               <li><strong>Email:</strong> arishwanthreddy@gmail.com <em style={{ color: '#64748b', fontSize: '13px' }}>(Temporary contact — dedicated support email coming soon with our domain launch)</em></li>
               <li><strong>Response time:</strong> Within 5 business days for general enquiries, within 30 days for GDPR requests</li>
             </ul>
-            <p>Project SAVE is operated independently. We are not affiliated with any government agency.</p>
+            <p>Hetusafe is operated independently. We are not affiliated with any government agency.</p>
           </Section>
 
           <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>

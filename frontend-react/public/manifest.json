@@ -1,6 +1,6 @@
 {
-  "name": "Project SAVE — Safety Alert & Visibility Engine",
-  "short_name": "Project SAVE",
+  "name": "Hetusafe — Safety Alert & Visibility Engine",
+  "short_name": "Hetusafe",
   "description": "Report and track community hazards in real time",
   "start_url": "/",
   "display": "standalone",

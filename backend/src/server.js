@@ -54,7 +54,7 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Project SAVE backend running at http://localhost:${PORT}`);
+  console.log(`🚀 Hetusafe backend running at http://localhost:${PORT}`);
   // NOTIF3 — start background jobs after server is up
   startCleanupJob();
   startDailyBackup();
