@@ -121,7 +121,7 @@ async function seed() {
 
   // Find or create a seed admin user
   let seedUserId
-  const existing = await pool.query("SELECT id FROM users WHERE email = 'seed@saveapp.digital' LIMIT 1")
+  const existing = await pool.query("SELECT id FROM users WHERE email = 'seed@hetusafe.com' LIMIT 1")
   if (existing.rows.length) {
     seedUserId = existing.rows[0].id
     console.log(`   Using existing seed user id=${seedUserId}`)
@@ -130,7 +130,7 @@ async function seed() {
     const hash = await bcrypt.hash('SeedPassword123!', 12)
     const inserted = await pool.query(
       `INSERT INTO users (name, email, password_hash, is_verified, role, created_at)
-       VALUES ('Seed User', 'seed@saveapp.digital', $1, true, 'user', NOW())
+       VALUES ('Seed User', 'seed@hetusafe.com', $1, true, 'user', NOW())
        RETURNING id`,
       [hash]
     )

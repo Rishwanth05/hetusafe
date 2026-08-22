@@ -88,7 +88,7 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
 const swaggerSpec = swaggerJsdoc({
   definition: {
     openapi: '3.0.0',
-    info: { title: 'Project SAVE API', version: '1.0.0' },
+    info: { title: 'Hetusafe API', version: '1.0.0' },
     servers: [{ url: '/api/v1' }],
   },
   apis: ['./src/routes/*.js'],
@@ -97,7 +97,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 }
 
-app.get('/', (req, res) => res.json({ message: 'Project SAVE backend ✅' }));
+app.get('/', (req, res) => res.json({ message: 'Hetusafe backend ✅' }));
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 // SEC4 — expose CSRF token to frontend (generateCsrfToken sets cookie + returns token)

@@ -55,7 +55,7 @@ export default function ResetPassword() {
               <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
               <path d="M22 28L26 32L34 24" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span className="text-xl font-bold text-light tracking-tight">Project SAVE</span>
+            <span className="text-xl font-bold text-light tracking-tight">Hetusafe</span>
           </div>
 
           {/* ── Success state ─────────────────────────────────────────── */}

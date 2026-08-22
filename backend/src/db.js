@@ -1,6 +1,8 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const Sentry = process.env.SENTRY_DSN ? require('@sentry/node') : null;
+
 const POOL_TUNING = {
   max: 20,
   idleTimeoutMillis: 30000,
@@ -49,5 +51,20 @@ setImmediate(() => {
     }
   });
 });
+
+const _query = pool.query.bind(pool);
+pool.query = async function slowQueryAware(text, params) {
+  const start = Date.now();
+  const result = await _query(text, params);
+  const duration = Date.now() - start;
+  if (duration > 200 && Sentry) {
+    const sql = typeof text === 'string' ? text : (text && text.text) || '';
+    Sentry.captureMessage('Slow query detected', {
+      level: 'warning',
+      extra: { query: sql.slice(0, 200), duration_ms: duration },
+    });
+  }
+  return result;
+};
 
 module.exports = pool;

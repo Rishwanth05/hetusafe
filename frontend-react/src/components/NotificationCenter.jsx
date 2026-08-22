@@ -72,7 +72,7 @@ export default function NotificationCenter({ unreadCount: externalCount, onMarkR
           }}>
             <span style={{ fontSize: '16px' }}>{toast.severity === 'critical' ? '🚨' : '⚠️'}</span>
             <span style={{ color: '#fff', fontWeight: '800', fontSize: '12px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {toast.severity === 'critical' ? 'Emergency Alert' : 'Hazard Alert'} — Project SAVE
+              {toast.severity === 'critical' ? 'Emergency Alert' : 'Hazard Alert'} — Hetusafe
             </span>
             <button
               onClick={() => { clearTimeout(toastTimer.current); setToast(null) }}

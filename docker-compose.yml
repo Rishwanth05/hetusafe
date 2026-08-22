@@ -7,7 +7,7 @@ services:
     container_name: save_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: project_save
+      POSTGRES_DB: hetusafe
       POSTGRES_USER: save_user
       POSTGRES_PASSWORD: ${DB_PASS}
     ports:
@@ -37,7 +37,7 @@ services:
       DB_PORT: 5432
       DB_USER: save_user
       DB_PASS: ${DB_PASS}
-      DB_NAME: project_save
+      DB_NAME: hetusafe
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
     volumes:
