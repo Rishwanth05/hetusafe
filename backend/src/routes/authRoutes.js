@@ -584,7 +584,8 @@ router.post('/forgot-password', async (req, res) => {
       [email, token, expires_at]
     );
 
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    const primaryOrigin = (process.env.FRONTEND_URL || '').split(',')[0].trim();
+    const resetLink = `${primaryOrigin}/reset-password?token=${token}`;
     const { sendResetEmail } = require('../utils/email');
     await sendResetEmail(email, resetLink);
 
