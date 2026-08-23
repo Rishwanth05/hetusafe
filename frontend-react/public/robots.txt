@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /report
+Disallow: /admin
+Disallow: /profile
+Disallow: /results
+Disallow: /contact
+Disallow: /emergency
+Disallow: /alerts
+Disallow: /my-reports
+
+Sitemap: https://hetusafe.com/sitemap.xml
