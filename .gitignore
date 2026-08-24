@@ -25,3 +25,6 @@ Thumbs.db
 .vscode/
 firebase-service-account.json
 !frontend-react/public/firebase-messaging-sw.js
+
+# Claude Code local config
+.claude/
