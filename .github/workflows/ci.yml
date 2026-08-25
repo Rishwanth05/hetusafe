@@ -88,6 +88,19 @@ jobs:
           PGPASSWORD: ci_postgres_pass
         run: psql -h localhost -U save_user -d hetusafe_test -f backend/migrations/schema.sql
 
+      - name: Validate migration list is complete
+        run: |
+          missing=0
+          for f in backend/migrations/*.sql; do
+            base=$(basename "$f")
+            [ "$base" = "schema.sql" ] && continue
+            if ! grep -qF "backend/migrations/$base" .github/workflows/ci.yml; then
+              echo "ERROR: $base is in migrations/ but missing from ci.yml"
+              missing=1
+            fi
+          done
+          [ $missing -eq 0 ] || exit 1
+
       - name: Run incremental migrations
         env:
           PGPASSWORD: ci_postgres_pass
@@ -105,7 +118,8 @@ jobs:
             backend/migrations/week5_refresh_tokens.sql \
             backend/migrations/week5_user_location.sql \
             backend/migrations/week6_notifications_per_user.sql \
-            backend/migrations/resolution_votes.sql; do
+            backend/migrations/resolution_votes.sql \
+            backend/migrations/report_archive.sql; do
             echo "→ $f"
             psql -h localhost -U save_user -d hetusafe_test -f "$f"
           done
