@@ -170,6 +170,7 @@ router.get("/all", verifyToken, async (req, res) => {
         ORDER BY changed_at DESC
         LIMIT 1
       ) rsh ON true
+      WHERE r.archived_at IS NULL
       ORDER BY r.created_at DESC
     `);
 

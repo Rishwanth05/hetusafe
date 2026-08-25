@@ -226,6 +226,61 @@ router.delete('/reports/:id', async (req, res) => {
   }
 });
 
+// ── ARCHIVE REPORT ────────────────────────────────────────────────────────────
+router.post('/reports/:id/archive', async (req, res) => {
+  try {
+    const target = await pool.query(
+      'SELECT id, hazard_type, status, archived_at FROM reports WHERE id = $1',
+      [req.params.id]
+    );
+    if (target.rows.length === 0)
+      return res.status(404).json({ message: 'Report not found' });
+    if (target.rows[0].archived_at)
+      return res.status(409).json({ message: 'Report is already archived' });
+
+    await pool.query('UPDATE reports SET archived_at = NOW() WHERE id = $1', [req.params.id]);
+    try { await redis.del('reports:all'); } catch {}
+    await pool.query(
+      `INSERT INTO admin_audit_log (admin_id, admin_email, action, target_type, target_id, old_value, new_value)
+       VALUES ($1, $2, 'archive_report', 'report', $3, $4, $5)`,
+      [req.user.id, req.user.email, req.params.id,
+       JSON.stringify({ archived_at: null }),
+       JSON.stringify({ archived_at: new Date().toISOString() })]
+    );
+    res.json({ message: 'Report archived ✅' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── UNARCHIVE REPORT ──────────────────────────────────────────────────────────
+router.post('/reports/:id/unarchive', async (req, res) => {
+  try {
+    const target = await pool.query(
+      'SELECT id, hazard_type, status, archived_at FROM reports WHERE id = $1',
+      [req.params.id]
+    );
+    if (target.rows.length === 0)
+      return res.status(404).json({ message: 'Report not found' });
+    if (!target.rows[0].archived_at)
+      return res.status(409).json({ message: 'Report is not archived' });
+
+    const previousArchivedAt = target.rows[0].archived_at;
+    await pool.query('UPDATE reports SET archived_at = NULL WHERE id = $1', [req.params.id]);
+    try { await redis.del('reports:all'); } catch {}
+    await pool.query(
+      `INSERT INTO admin_audit_log (admin_id, admin_email, action, target_type, target_id, old_value, new_value)
+       VALUES ($1, $2, 'unarchive_report', 'report', $3, $4, $5)`,
+      [req.user.id, req.user.email, req.params.id,
+       JSON.stringify({ archived_at: previousArchivedAt }),
+       JSON.stringify({ archived_at: null })]
+    );
+    res.json({ message: 'Report unarchived ✅' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── CHART-1: ANALYTICS DATA (30 days) ─────────────────────────────────────────
 router.get('/analytics', async (req, res) => {
   try {

@@ -52,6 +52,23 @@ export default function MyReports() {
   const resolved = reports.filter(r => r.status === 'resolved')
   const shown    = tab === 'active' ? active : resolved
 
+  /* ── Year grouping ───────────────────────────────────────────────────── */
+  function groupByYear(list) {
+    const map = {}
+    list.forEach(r => {
+      if (!r.created_at) {
+        console.warn('[MyReports] report missing created_at, skipping year group:', r.id)
+        return
+      }
+      const year = new Date(r.created_at).getFullYear()
+      if (!map[year]) map[year] = []
+      map[year].push(r)
+    })
+    return Object.entries(map).sort(([a], [b]) => Number(b) - Number(a))
+  }
+
+  const yearGroups = groupByYear(shown)
+
   /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <div className="min-h-screen bg-canvas">
@@ -150,51 +167,64 @@ export default function MyReports() {
             )}
           </Card>
         ) : (
-          <div className="space-y-3">
-            {shown.map(r => {
-              const isResolved = r.status === 'resolved'
-              return (
-                <Card
-                  key={r.id}
-                  className={`p-4 flex items-center gap-4 ${isResolved ? 'border-accent/30' : ''}`}
-                >
-                  {/* Thumbnail */}
-                  {r.image_url
-                    ? <img
-                        src={r.image_url}
-                        alt="hazard"
-                        className="w-14 h-14 object-cover rounded-xl shrink-0"
-                      />
-                    : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
-                        🚧
-                      </div>
-                  }
+          <div className="space-y-6">
+            {yearGroups.map(([year, groupReports]) => (
+              <div key={year}>
+                {/* Year section header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-body font-bold text-muted">{year}</span>
+                  <div className="flex-1 h-px bg-edge" />
+                  <span className="text-[11px] text-muted">{groupReports.length} report{groupReports.length !== 1 ? 's' : ''}</span>
+                </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
-                      <PriorityBadge level={r.severity} />
-                    </div>
-                    <p className="text-caption text-muted mb-1 leading-relaxed truncate">
-                      {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
+                <div className="space-y-3">
+                  {groupReports.map(r => {
+                    const isResolved = r.status === 'resolved'
+                    return (
+                      <Card
+                        key={r.id}
+                        className={`p-4 flex items-center gap-4 ${isResolved ? 'border-accent/30' : ''}`}
+                      >
+                        {/* Thumbnail */}
+                        {r.image_url
+                          ? <img
+                              src={r.image_url}
+                              alt="hazard"
+                              className="w-14 h-14 object-cover rounded-xl shrink-0"
+                            />
+                          : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
+                              🚧
+                            </div>
+                        }
 
-                  {/* Status pill */}
-                  <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
-                    isResolved
-                      ? 'text-accent bg-accent/10 border-accent/20'
-                      : 'text-warn bg-warn/10 border-warn/20'
-                  }`}>
-                    {isResolved ? '✅ Resolved' : 'Active'}
-                  </span>
-                </Card>
-              )
-            })}
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
+                            <PriorityBadge level={r.severity} />
+                          </div>
+                          <p className="text-caption text-muted mb-1 leading-relaxed truncate">
+                            {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
+                          </p>
+                          <p className="text-[11px] text-muted">
+                            {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+
+                        {/* Status pill */}
+                        <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
+                          isResolved
+                            ? 'text-accent bg-accent/10 border-accent/20'
+                            : 'text-warn bg-warn/10 border-warn/20'
+                        }`}>
+                          {isResolved ? '✅ Resolved' : 'Active'}
+                        </span>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

@@ -397,6 +397,173 @@ describe('DELETE /api/v1/admin/reports/:id', () => {
   });
 });
 
+// ── POST /admin/reports/:id/archive & /unarchive ─────────────────────────────
+
+describe('POST /api/v1/admin/reports/:id/archive', () => {
+  let adminToken, adminUserId, reportId;
+
+  beforeEach(async () => {
+    ({ token: adminToken, userId: adminUserId } = await createAdmin());
+    const { userId } = await createUser({ email: 'archowner@admin-test.com' });
+    reportId = await insertReport(userId);
+  });
+
+  test('non-admin gets 403', async () => {
+    const { token: userToken } = await createUser({ email: 'notadmin@admin-test.com' });
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/archive`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(403);
+  });
+
+  test('unauthenticated gets 401', async () => {
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/archive`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(401);
+  });
+
+  test('archives a report: sets archived_at, busts cache, writes audit log', async () => {
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/archive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/archived/i);
+
+    // archived_at is now set
+    const { rows } = await pool.query('SELECT archived_at FROM reports WHERE id = $1', [reportId]);
+    expect(rows[0].archived_at).not.toBeNull();
+
+    // audit log entry
+    const { rows: log } = await pool.query(
+      "SELECT * FROM admin_audit_log WHERE action = 'archive_report'"
+    );
+    expect(log).toHaveLength(1);
+    expect(log[0].admin_id).toBe(adminUserId);
+    expect(log[0].target_id).toBe(String(reportId));
+    expect(log[0].old_value).toMatchObject({ archived_at: null });
+    expect(log[0].new_value.archived_at).toBeTruthy();
+  });
+
+  test('archived report does NOT appear in GET /reports/all', async () => {
+    // archive it
+    await agent
+      .post(`/api/v1/admin/reports/${reportId}/archive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    // public feed must exclude it
+    const feedRes = await agent
+      .get('/api/v1/reports/all')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(feedRes.status).toBe(200);
+    const ids = feedRes.body.map(r => r.id);
+    expect(ids).not.toContain(reportId);
+  });
+
+  test('archiving an already-archived report returns 409', async () => {
+    await agent
+      .post(`/api/v1/admin/reports/${reportId}/archive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/archive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(409);
+  });
+
+  test('archiving a non-existent report returns 404', async () => {
+    const res = await agent
+      .post('/api/v1/admin/reports/999999/archive')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/v1/admin/reports/:id/unarchive', () => {
+  let adminToken, adminUserId, reportId;
+
+  beforeEach(async () => {
+    ({ token: adminToken, userId: adminUserId } = await createAdmin());
+    const { userId } = await createUser({ email: 'unarchowner@admin-test.com' });
+    reportId = await insertReport(userId);
+    // pre-archive the report so unarchive tests start from archived state
+    await pool.query('UPDATE reports SET archived_at = NOW() WHERE id = $1', [reportId]);
+  });
+
+  test('non-admin gets 403', async () => {
+    const { token: userToken } = await createUser({ email: 'notadmin2@admin-test.com' });
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/unarchive`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(403);
+  });
+
+  test('unarchives a report: clears archived_at, busts cache, writes audit log', async () => {
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/unarchive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/unarchived/i);
+
+    // archived_at is now NULL
+    const { rows } = await pool.query('SELECT archived_at FROM reports WHERE id = $1', [reportId]);
+    expect(rows[0].archived_at).toBeNull();
+
+    // audit log entry
+    const { rows: log } = await pool.query(
+      "SELECT * FROM admin_audit_log WHERE action = 'unarchive_report'"
+    );
+    expect(log).toHaveLength(1);
+    expect(log[0].admin_id).toBe(adminUserId);
+    expect(log[0].target_id).toBe(String(reportId));
+    expect(log[0].old_value.archived_at).toBeTruthy();
+    expect(log[0].new_value).toMatchObject({ archived_at: null });
+  });
+
+  test('unarchived report reappears in GET /reports/all', async () => {
+    await agent
+      .post(`/api/v1/admin/reports/${reportId}/unarchive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    const feedRes = await agent
+      .get('/api/v1/reports/all')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(feedRes.status).toBe(200);
+    const ids = feedRes.body.map(r => r.id);
+    expect(ids).toContain(reportId);
+  });
+
+  test('unarchiving a non-archived report returns 409', async () => {
+    // clear the pre-archive
+    await pool.query('UPDATE reports SET archived_at = NULL WHERE id = $1', [reportId]);
+
+    const res = await agent
+      .post(`/api/v1/admin/reports/${reportId}/unarchive`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(409);
+  });
+
+  test('unarchiving a non-existent report returns 404', async () => {
+    const res = await agent
+      .post('/api/v1/admin/reports/999999/unarchive')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(404);
+  });
+});
+
 // ── GET /admin/analytics ──────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/analytics', () => {

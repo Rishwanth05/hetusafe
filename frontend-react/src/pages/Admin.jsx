@@ -130,6 +130,24 @@ export default function Admin() {
     loadReports()
   }
 
+  const archiveReport = async (id) => {
+    try {
+      await client.post(`/admin/reports/${id}/archive`)
+      loadReports()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Archive failed')
+    }
+  }
+
+  const unarchiveReport = async (id) => {
+    try {
+      await client.post(`/admin/reports/${id}/unarchive`)
+      loadReports()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Unarchive failed')
+    }
+  }
+
   const sendBroadcast = async () => {
     if (!broadcast.title || !broadcast.message) return
     await client.post('/admin/broadcast', broadcast)
@@ -317,7 +335,7 @@ export default function Admin() {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'13px', minWidth:'700px' }}>
                   <thead>
                     <tr style={{ background:'#334155' }}>
-                      {['ID','Type','Severity','Status','Reporter','Date','Actions'].map(h => (
+                      {['ID','Type','Severity','Status','Reporter','Date','Archived','Actions'].map(h => (
                         <th key={h} style={{ padding:'10px 14px', textAlign:'left', color:'#94a3b8', fontWeight:'600' }}>{h}</th>
                       ))}
                     </tr>
@@ -339,6 +357,17 @@ export default function Admin() {
                         <td style={{ padding:'10px 14px', color:'#94a3b8' }}>{r.user_name || 'Anonymous'}</td>
                         <td style={{ padding:'10px 14px', color:'#64748b' }}>{timeAgo(r.created_at)}</td>
                         <td style={{ padding:'10px 14px' }}>
+                          {r.archived_at
+                            ? <span style={{ background:'#1e3a5f', color:'#93c5fd', padding:'2px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:'600' }}>📦 Archived</span>
+                            : <span style={{ color:'#475569', fontSize:'11px' }}>—</span>
+                          }
+                        </td>
+                        <td style={{ padding:'10px 14px', display:'flex', gap:'6px', alignItems:'center' }}>
+                          {r.archived_at ? (
+                            <button onClick={() => unarchiveReport(r.id)} style={{ background:'#1e3a5f', color:'#93c5fd', border:'1px solid #1d4ed8', borderRadius:'6px', padding:'4px 10px', fontSize:'12px', cursor:'pointer', fontWeight:'600' }}>Unarchive</button>
+                          ) : (
+                            <button onClick={() => archiveReport(r.id)} style={{ background:'#1e293b', color:'#94a3b8', border:'1px solid #334155', borderRadius:'6px', padding:'4px 10px', fontSize:'12px', cursor:'pointer', fontWeight:'600' }}>Archive</button>
+                          )}
                           <button onClick={() => deleteReport(r.id)} style={{ background:'#7f1d1d', color:'#fca5a5', border:'none', borderRadius:'6px', padding:'4px 10px', fontSize:'12px', cursor:'pointer' }}>Delete</button>
                         </td>
                       </tr>
