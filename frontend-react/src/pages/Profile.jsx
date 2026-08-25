@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
-import { AppDrawer, BottomNav, Card, Button, PriorityBadge } from '../components/ui'
+import { AppDrawer, BottomNav, Card, Button } from '../components/ui'
 
 /* ── Shared dark input style (replaces old light inputStyle) ─────────────── */
 const INPUT_CLS = 'w-full bg-canvas border border-edge rounded-xl px-4 py-3 text-body text-light placeholder:text-muted focus:outline-none focus:border-accent transition-colors'
@@ -27,6 +27,7 @@ export default function Profile() {
   const [profile, setProfile] = useState(null)
   const [myReports, setMyReports] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
 
   const [editingName, setEditingName] = useState(false)
@@ -47,10 +48,6 @@ export default function Profile() {
   const [deleteError, setDeleteError] = useState('')
   const [deleteMsg, setDeleteMsg] = useState('')
 
-  const [contacts, setContacts] = useState([])
-  const [showAddContact, setShowAddContact] = useState(false)
-  const [newContact, setNewContact] = useState({ name: '', phone: '', relation: '' })
-
   /* ── Top-bar / drawer state ───────────────────────────────────────────── */
   const [menuOpen, setMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -59,10 +56,6 @@ export default function Profile() {
 
   /* ── All existing useEffects (unchanged) ─────────────────────────────── */
   useEffect(() => {
-    client.get('/auth/emergency-contacts')
-      .then(({ data }) => setContacts(data))
-      .catch(() => {})
-
     Promise.all([
       client.get('/auth/me'),
       client.get('/auth/my-reports'),
@@ -70,8 +63,10 @@ export default function Profile() {
       setProfile(profileRes.data)
       setMyReports(reportsRes.data)
       setNewName(profileRes.data.name)
-    }).catch(console.error)
-      .finally(() => setLoading(false))
+    }).catch(err => {
+      console.error(err)
+      setLoadError(true)
+    }).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
@@ -99,8 +94,8 @@ export default function Profile() {
     setNameLoading(true); setNameMsg('')
     try {
       const { data } = await client.put('/auth/update-name', { name: newName })
-      const token = localStorage.getItem('token')
-      login(data.user, token)
+      const refreshToken = localStorage.getItem('refreshToken')
+      login(data.user, null, refreshToken)
       setProfile(p => ({ ...p, name: data.user.name }))
       setNameMsg('✅ Name updated!')
       setEditingName(false)
@@ -155,21 +150,6 @@ export default function Profile() {
     }
   }
 
-  const saveContact = () => {
-    if (!newContact.name || !newContact.phone) return
-    const updated = [...contacts, { ...newContact, id: Date.now() }]
-    setContacts(updated)
-    client.put('/auth/emergency-contacts', { contacts: updated }).catch(() => {})
-    setNewContact({ name: '', phone: '', relation: '' })
-    setShowAddContact(false)
-  }
-
-  const deleteContact = (id) => {
-    const updated = contacts.filter(c => c.id !== id)
-    setContacts(updated)
-    client.put('/auth/emergency-contacts', { contacts: updated }).catch(() => {})
-  }
-
   /* ── Derived values (unchanged) ─────────────────────────────────────── */
   const initials       = (profile?.name || user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
   const totalReports   = myReports.length
@@ -177,13 +157,31 @@ export default function Profile() {
   const activeReports  = myReports.filter(r => r.status !== 'resolved').length
   const tierCls        = TIER_COLOR[profile?.badge_tier] || TIER_COLOR.Newcomer
 
-  /* ── Loading state ───────────────────────────────────────────────────── */
+  /* ── Loading / error states ──────────────────────────────────────────── */
   if (loading) {
     return (
       <div className="min-h-screen bg-canvas flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-edge border-t-accent rounded-full animate-spin" />
           <p className="text-body text-muted">Loading profile…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-canvas flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-3xl mb-4" aria-hidden="true">⚠️</p>
+          <p className="text-section font-semibold text-light mb-2">Couldn't load your profile</p>
+          <p className="text-body text-muted mb-6">Check your connection and try again.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2.5 bg-accent text-canvas font-semibold rounded-full hover:opacity-90 transition-opacity focus:outline-none"
+          >
+            Retry
+          </button>
         </div>
       </div>
     )
@@ -247,7 +245,7 @@ export default function Profile() {
               <p className="text-caption text-muted truncate mt-0.5">{profile?.email}</p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-caption text-muted">
-                  Member since {new Date(profile?.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}
                 </span>
                 {profile?.badge_tier && (
                   <span className={`text-caption font-semibold border px-2 py-0.5 rounded-full whitespace-nowrap ${tierCls.bg}`}>
@@ -276,12 +274,10 @@ export default function Profile() {
         </div>
 
         {/* ── Tab bar ───────────────────────────────────────────────── */}
-        <div className="flex gap-1 bg-surface border border-edge rounded-2xl p-1 mb-5 overflow-x-auto">
+        <div className="flex gap-1 bg-surface border border-edge rounded-2xl p-1 mb-5 w-fit">
           {[
-            { id: 'overview',  label: '👤 Overview'  },
-            { id: 'reports',   label: '📋 Reports'   },
-            { id: 'security',  label: '🔒 Security'  },
-            { id: 'emergency', label: '🚨 Emergency' },
+            { id: 'overview', label: '👤 Overview' },
+            { id: 'security', label: '🔒 Security'  },
           ].map(t => (
             <button
               key={t.id}
@@ -366,7 +362,7 @@ export default function Profile() {
               <label className={LABEL_CLS}>Member Since</label>
               <div className="bg-elevated border border-edge rounded-xl px-4 py-3">
                 <span className="text-body text-light">
-                  {new Date(profile?.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
                 </span>
               </div>
             </div>
@@ -405,79 +401,6 @@ export default function Profile() {
               </div>
             </div>
           </Card>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════
-            MY REPORTS TAB
-        ═══════════════════════════════════════════════════════════ */}
-        {activeTab === 'reports' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-section font-bold text-light">My Reports ({myReports.length})</h2>
-              <Button variant="primary" size="sm" onClick={() => navigate('/report')}>+ New Report</Button>
-            </div>
-
-            {myReports.length === 0 ? (
-              <Card className="p-12 text-center">
-                <div className="text-5xl mb-4" aria-hidden="true">📋</div>
-                <p className="text-section font-semibold text-light mb-2">No reports yet</p>
-                <p className="text-body text-muted mb-6">Start contributing to community safety</p>
-                <Button variant="primary" onClick={() => navigate('/report')}>Report First Hazard</Button>
-              </Card>
-            ) : (
-              myReports.map(r => {
-                const isResolved = r.status === 'resolved'
-                return (
-                  <Card
-                    key={r.id}
-                    className={isResolved ? 'border-accent/30' : ''}
-                  >
-                    <div className="flex items-center gap-4 p-4">
-                      {/* Thumbnail */}
-                      {r.image_url
-                        ? <img
-                            src={r.image_url}
-                            alt="hazard"
-                            className="w-14 h-14 object-cover rounded-xl shrink-0"
-                          />
-                        : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
-                            🚧
-                          </div>
-                      }
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
-                          <PriorityBadge level={r.severity} />
-                          {isResolved && (
-                            <span className="text-caption font-semibold text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
-                              ✅ Resolved
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-caption text-muted mb-1 leading-relaxed">
-                          {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
-                        </p>
-                        <p className="text-caption text-muted">
-                          {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      </div>
-
-                      {/* Status pill */}
-                      <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
-                        isResolved
-                          ? 'text-accent bg-accent/10 border-accent/20'
-                          : 'text-warn bg-warn/10 border-warn/20'
-                      }`}>
-                        {isResolved ? 'Resolved' : 'Active'}
-                      </span>
-                    </div>
-                  </Card>
-                )
-              })
-            )}
-          </div>
         )}
 
         {/* ═══════════════════════════════════════════════════════════
@@ -657,96 +580,6 @@ export default function Profile() {
 
               {deleteMsg && <p className="text-caption text-danger mt-3">{deleteMsg}</p>}
             </Card>
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════
-            EMERGENCY CONTACTS TAB
-        ═══════════════════════════════════════════════════════════ */}
-        {activeTab === 'emergency' && (
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-section font-bold text-light">Emergency Contacts</h2>
-                <p className="text-caption text-muted mt-1">Shared with the Emergency page</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Button variant="secondary" size="sm" onClick={() => navigate('/emergency')}>
-                  🚨 Emergency Page
-                </Button>
-                <Button variant="primary" size="sm" onClick={() => setShowAddContact(true)}>
-                  + Add
-                </Button>
-              </div>
-            </div>
-
-            {/* Add contact form */}
-            {showAddContact && (
-              <Card className="p-4 border-accent/40">
-                <h3 className="text-body font-bold text-light mb-4">Add Emergency Contact</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                  {[
-                    { label: 'Full Name',     key: 'name',     type: 'text', placeholder: 'e.g. Mom'           },
-                    { label: 'Phone Number',  key: 'phone',    type: 'tel',  placeholder: '+1 234 567 8900'     },
-                    { label: 'Relation',      key: 'relation', type: 'text', placeholder: 'e.g. Mother'         },
-                  ].map(f => (
-                    <div key={f.key}>
-                      <label className={LABEL_CLS}>{f.label}</label>
-                      <input
-                        type={f.type}
-                        placeholder={f.placeholder}
-                        value={newContact[f.key]}
-                        onChange={e => setNewContact(p => ({ ...p, [f.key]: e.target.value }))}
-                        className={INPUT_CLS}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => setShowAddContact(false)}>Cancel</Button>
-                  <Button variant="primary" size="sm" onClick={saveContact}>Save Contact</Button>
-                </div>
-              </Card>
-            )}
-
-            {/* Empty state */}
-            {contacts.length === 0 && !showAddContact ? (
-              <Card className="p-12 text-center">
-                <div className="text-5xl mb-4" aria-hidden="true">👥</div>
-                <p className="text-section font-semibold text-light mb-2">No emergency contacts yet</p>
-                <p className="text-body text-muted mb-6">Add people to reach in case of emergency</p>
-                <Button variant="primary" onClick={() => setShowAddContact(true)}>+ Add First Contact</Button>
-              </Card>
-            ) : (
-              contacts.map(c => (
-                <Card key={c.id} className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-xl shrink-0" aria-hidden="true">
-                      👤
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-body text-light font-bold truncate">{c.name}</p>
-                      <p className="text-caption text-accent font-semibold">{c.phone}</p>
-                      {c.relation && <p className="text-caption text-muted">{c.relation}</p>}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <a
-                        href={`tel:${c.phone}`}
-                        className="text-caption font-semibold text-canvas bg-accent px-3 py-2 rounded-xl hover:opacity-90 transition-opacity"
-                      >
-                        📞 Call
-                      </a>
-                      <button
-                        onClick={() => deleteContact(c.id)}
-                        className="text-caption font-semibold text-danger bg-danger/10 border border-danger/30 px-3 py-2 rounded-xl hover:bg-danger/20 transition-colors focus:outline-none"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                </Card>
-              ))
-            )}
           </div>
         )}
 
