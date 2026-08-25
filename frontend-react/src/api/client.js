@@ -106,6 +106,15 @@ client.interceptors.response.use(
     }
 
     if (err.response?.status === 401 && !original._retry) {
+      const AUTH_OWN_401 = [
+        '/auth/login', '/auth/signup', '/auth/verify-login',
+        '/auth/verify-email', '/auth/resend-otp',
+        '/auth/forgot-password', '/auth/reset-password',
+      ]
+      if (AUTH_OWN_401.some(path => original.url?.includes(path))) {
+        return Promise.reject(err)
+      }
+
       original._retry = true
 
       const storedRefreshToken = localStorage.getItem('refreshToken')
