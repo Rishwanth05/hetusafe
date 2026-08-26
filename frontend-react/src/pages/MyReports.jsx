@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
@@ -8,11 +8,12 @@ import { AppDrawer, BottomNav, Card, Button, PriorityBadge } from '../components
 export default function MyReports() {
   const { user } = useAuth()
   const navigate  = useNavigate()
+  const location  = useLocation()
 
   /* ── Data state — same endpoint as Profile.jsx ───────────────────────── */
   const [reports, setReports]   = useState([])
   const [loading, setLoading]   = useState(true)
-  const [tab, setTab]           = useState('active')
+  const [tab, setTab]           = useState(location.state?.tab === 'resolved' ? 'resolved' : 'active')
 
   /* ── Top-bar / drawer state ───────────────────────────────────────────── */
   const [menuOpen, setMenuOpen]         = useState(false)
