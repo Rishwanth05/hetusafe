@@ -62,6 +62,13 @@ const checkDuplicateSchema = z.object({
   hazard_type: hazardTypeField,
 });
 
+const nearbyQuerySchema = z.object({
+  lat:       latField,
+  lng:       lngField,
+  radius_km: z.coerce.number().positive('radius_km must be positive').max(100, 'radius_km must be at most 100').default(10),
+  limit:     z.coerce.number().int('limit must be an integer').positive('limit must be positive').max(20, 'limit must be at most 20').default(5),
+});
+
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3')
 
 const s3 = new S3Client({
@@ -170,7 +177,19 @@ router.get("/all", verifyToken, async (req, res) => {
         ORDER BY changed_at DESC
         LIMIT 1
       ) rsh ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) FILTER (WHERE vote = 'confirmed') -
+          COUNT(*) FILTER (WHERE vote = 'disputed') AS net
+        FROM resolution_votes
+        WHERE report_id = r.id
+      ) v ON true
       WHERE r.archived_at IS NULL
+        AND NOT (
+          r.status = 'resolved'
+          AND r.resolved_at < NOW() - INTERVAL '24 hours'
+          AND v.net > 0
+        )
       ORDER BY r.created_at DESC
     `);
 
@@ -179,6 +198,54 @@ router.get("/all", verifyToken, async (req, res) => {
     } catch {}
 
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /reports/nearby — distance-sorted feed for the Home page "Near You" widget.
+// Reuses Pattern B (Haversine in km) from /check-duplicate.
+// Applies the same archived_at + auto-hide rules as GET /all.
+router.get('/nearby', verifyToken, async (req, res) => {
+  const parsed = nearbyQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+  const { lat, lng, radius_km, limit } = parsed.data;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT sub.*, u.name, u.trust_score, u.badge_tier,
+             ROUND(sub.distance_km::numeric, 2) AS distance_km
+      FROM (
+        SELECT r.*,
+          (6371 * acos(LEAST(1,
+            cos(radians($1)) * cos(radians(r.latitude)) *
+            cos(radians(r.longitude) - radians($2)) +
+            sin(radians($1)) * sin(radians(r.latitude))
+          ))) AS distance_km
+        FROM reports r
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(*) FILTER (WHERE vote = 'confirmed') -
+            COUNT(*) FILTER (WHERE vote = 'disputed') AS net
+          FROM resolution_votes
+          WHERE report_id = r.id
+        ) v ON true
+        WHERE r.archived_at IS NULL
+          AND NOT (
+            r.status = 'resolved'
+            AND r.resolved_at < NOW() - INTERVAL '24 hours'
+            AND v.net > 0
+          )
+      ) sub
+      LEFT JOIN users u ON sub.user_id = u.id
+      WHERE sub.distance_km <= $3
+      ORDER BY sub.distance_km ASC
+      LIMIT $4
+    `, [lat, lng, radius_km, limit]);
+
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

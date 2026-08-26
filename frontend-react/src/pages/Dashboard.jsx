@@ -5,7 +5,7 @@ import Map from '../components/Map'
 import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
 import { io } from 'socket.io-client'
-import { Button, BottomNav, StatCard, Card, AppDrawer } from '../components/ui'
+import { Button, BottomNav, StatCard, Card, AppDrawer, PriorityBadge } from '../components/ui'
 
 const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
 
@@ -35,6 +35,16 @@ export default function Dashboard() {
   const drawerRef = useRef(null)
 
   const [unreadCount, setUnreadCount] = useState(0)
+
+  // ── Nearby reports feature ──────────────────────────────────────────────
+  const [nearbyReports, setNearbyReports]   = useState([])
+  const [nearbyLoading, setNearbyLoading]   = useState(false)
+  const [nearbyCoords, setNearbyCoords]     = useState(null)   // { lat, lng }
+  const [nearbyLabel, setNearbyLabel]       = useState(null)   // Nominatim display name
+  const [locationState, setLocationState]   = useState('pending') // 'pending'|'granted'|'denied'|'confirmed'
+  const [areaInput, setAreaInput]           = useState('')
+  const [areaError, setAreaError]           = useState('')
+  const [areaLoading, setAreaLoading]       = useState(false)
 
   // ── All useEffects from original (unchanged logic) ──────────────────────
   useEffect(() => {
@@ -98,10 +108,77 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
+  // ── Geolocation: request on mount, set locationState ───────────────────
+  useEffect(() => {
+    if (!navigator.geolocation) { setLocationState('denied'); return }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setNearbyCoords({ lat: coords.latitude, lng: coords.longitude })
+        setLocationState('granted')
+      },
+      () => setLocationState('denied'),
+      { timeout: 8000 }
+    )
+  }, [])
+
+  // ── Fetch nearby reports when coords available; poll every 30s ──────────
+  useEffect(() => {
+    if (!nearbyCoords) return
+    const fetchNearby = () => {
+      setNearbyLoading(true)
+      client.get(`/reports/nearby?lat=${nearbyCoords.lat}&lng=${nearbyCoords.lng}&radius_km=10&limit=5`)
+        .then(({ data }) => setNearbyReports(data))
+        .catch(() => {})
+        .finally(() => setNearbyLoading(false))
+    }
+    fetchNearby()
+    const id = setInterval(fetchNearby, 30000)
+    return () => clearInterval(id)
+  }, [nearbyCoords])
+
   // ── All handlers from original (unchanged) ──────────────────────────────
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  // ── Nominatim area search (used when geolocation is denied) ────────────
+  const handleAreaSearch = async () => {
+    if (!areaInput.trim()) return
+    setAreaLoading(true)
+    setAreaError('')
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(areaInput.trim())}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'Hetusafe/1.0 (https://hetusafe.com)', 'Referer': 'https://hetusafe.com' } }
+      )
+      const data = await res.json()
+      if (!data.length) {
+        setAreaError("Couldn't find that location — try a nearby town or city name")
+        return
+      }
+      const { lat, lon, display_name } = data[0]
+      setNearbyCoords({ lat: parseFloat(lat), lng: parseFloat(lon) })
+      setNearbyLabel(display_name)
+      setLocationState('confirmed')
+    } catch {
+      setAreaError('Location search failed. Please try again.')
+    } finally {
+      setAreaLoading(false)
+    }
+  }
+
+  const timeAgo = (d) => {
+    const diff = (Date.now() - new Date(d)) / 1000
+    if (diff < 60)    return 'just now'
+    if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return new Date(d).toLocaleDateString()
+  }
+
+  const formatDistance = (km) => {
+    if (km < 1) return `${Math.round(km * 1000)} m away`
+    return `${km.toFixed(1)} km away`
   }
 
   // MAP4 — Haversine distance
@@ -270,22 +347,11 @@ export default function Dashboard() {
           safer — in real time.
         </p>
 
-        {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-10">
+        {/* CTA — sole hero action (FAB handles report submission app-wide) */}
+        <div className="mb-10">
           <Button
             variant="primary"
-            className="w-full sm:flex-1"
-            onClick={() => navigate('/report')}
-          >
-            Report a Hazard
-            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 shrink-0" aria-hidden="true">
-              <path d="M5 12h14M12 5l7 7-7 7"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full sm:flex-1"
+            className="w-full"
             onClick={() => navigate('/results', { state: { view: 'map' } })}
           >
             <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 shrink-0" aria-hidden="true">
@@ -301,26 +367,112 @@ export default function Dashboard() {
             4 cols on sm+ (640px+).
             Values come from the existing `reports` state — no new API calls. */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
-          <StatCard
-            value={loading ? '…' : String(reports.length)}
-            label="Reports"
-          />
-          <StatCard
-            value={loading ? '…' : String(activeCount)}
-            label="Active"
-            accent="text-warn"
-          />
-          <StatCard
-            value={loading ? '…' : String(resolvedCount)}
-            label="Resolved"
-            accent="text-accent"
-          />
-          <StatCard
-            value={loading ? '…' : rateStr}
-            label="Rate"
-            accent="text-glow"
-          />
+          <button onClick={() => navigate('/my-reports')} className="text-left focus:outline-none">
+            <StatCard value={loading ? '…' : String(reports.length)} label="Reports" />
+          </button>
+          <button onClick={() => navigate('/my-reports', { state: { tab: 'active' } })} className="text-left focus:outline-none">
+            <StatCard value={loading ? '…' : String(activeCount)} label="Active" accent="text-warn" />
+          </button>
+          <button onClick={() => navigate('/my-reports', { state: { tab: 'resolved' } })} className="text-left focus:outline-none">
+            <StatCard value={loading ? '…' : String(resolvedCount)} label="Resolved" accent="text-accent" />
+          </button>
+          <button onClick={() => navigate('/my-reports')} className="text-left focus:outline-none">
+            <StatCard value={loading ? '…' : rateStr} label="Rate" accent="text-glow" />
+          </button>
         </div>
+
+        {/* ── Near You ────────────────────────────────────────────────────── */}
+        <section className="mb-10" aria-label="Nearby reports">
+          <h2 className="text-section font-bold text-light mb-4">Near You</h2>
+
+          {/* Locating… */}
+          {locationState === 'pending' && (
+            <Card className="p-6 flex items-center gap-3 text-muted">
+              <div className="w-4 h-4 border-2 border-edge border-t-accent rounded-full animate-spin shrink-0" />
+              <span className="text-caption">Locating you…</span>
+            </Card>
+          )}
+
+          {/* Geolocation denied — area input fallback */}
+          {locationState === 'denied' && (
+            <Card className="p-5">
+              <p className="text-body text-light font-semibold mb-0.5">Enable location, or enter your area</p>
+              <p className="text-caption text-muted mb-4">to see nearby hazards</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={areaInput}
+                  onChange={e => setAreaInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAreaSearch()}
+                  placeholder="e.g. Downtown Austin, TX"
+                  className="flex-1 bg-canvas border border-edge rounded-xl px-3 py-2.5 text-body text-light placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+                />
+                <Button variant="primary" size="sm" onClick={handleAreaSearch} disabled={areaLoading}>
+                  {areaLoading ? '…' : 'Go'}
+                </Button>
+              </div>
+              {areaError && <p className="text-caption text-danger mt-2">{areaError}</p>}
+            </Card>
+          )}
+
+          {/* Nominatim confirmed label + re-enter option */}
+          {locationState === 'confirmed' && nearbyLabel && (
+            <p className="text-caption text-muted mb-3">
+              Near:{' '}
+              <span className="text-light font-medium">
+                {nearbyLabel.split(',').slice(0, 2).join(',')}
+              </span>
+              {' — not right? '}
+              <button
+                onClick={() => { setLocationState('denied'); setNearbyCoords(null); setNearbyLabel(null); setAreaInput('') }}
+                className="text-accent hover:underline focus:outline-none"
+              >
+                Try again
+              </button>
+            </p>
+          )}
+
+          {/* Feed — loading skeleton or cards */}
+          {(locationState === 'granted' || locationState === 'confirmed') && (
+            nearbyLoading && nearbyReports.length === 0 ? (
+              <div className="flex items-center justify-center py-10 gap-3">
+                <div className="w-6 h-6 border-2 border-edge border-t-accent rounded-full animate-spin" />
+                <span className="text-caption text-muted">Finding nearby reports…</span>
+              </div>
+            ) : nearbyReports.length === 0 ? (
+              <Card className="p-8 text-center">
+                <p className="text-3xl mb-2" aria-hidden="true">🌿</p>
+                <p className="text-body font-semibold text-light mb-1">No hazards reported near you</p>
+                <p className="text-caption text-muted">— great sign!</p>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {nearbyReports.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => navigate('/results', { state: { view: 'map', lat: parseFloat(r.latitude), lng: parseFloat(r.longitude) } })}
+                    className="w-full text-left focus:outline-none"
+                  >
+                    <Card className="p-3 flex items-center gap-3 hover:border-accent/30 transition-colors active:scale-[0.99]">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                          <span className="text-body text-light font-semibold truncate">{r.hazard_type}</span>
+                          <PriorityBadge level={r.severity} />
+                        </div>
+                        <p className="text-caption text-muted">
+                          {formatDistance(parseFloat(r.distance_km))} · {timeAgo(r.created_at)}
+                        </p>
+                      </div>
+                      <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-muted shrink-0" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+        </section>
 
       </main>
 
