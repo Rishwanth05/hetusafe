@@ -1644,6 +1644,17 @@ button {
     );
 }
 
+.avatar-generic {
+  background:
+    linear-gradient(
+      145deg,
+      #4dde81,
+      #138a3d
+    );
+
+  font-size: 15px;
+}
+
 .avatar-count {
   min-height: 25px;
 
@@ -6414,20 +6425,8 @@ button {
               </span>
 
               <div className="trust-avatars">
-                <span className="avatar avatar-1">
-                  A
-                </span>
-
-                <span className="avatar avatar-2">
-                  R
-                </span>
-
-                <span className="avatar avatar-3">
-                  M
-                </span>
-
-                <span className="avatar avatar-4">
-                  S
+                <span className="avatar avatar-generic">
+                  👤
                 </span>
 
                 <span className="avatar-count">
