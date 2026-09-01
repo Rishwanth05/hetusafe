@@ -120,7 +120,8 @@ jobs:
             backend/migrations/week6_notifications_per_user.sql \
             backend/migrations/resolution_votes.sql \
             backend/migrations/report_archive.sql \
-            backend/migrations/report_lat_lng_index.sql; do
+            backend/migrations/report_lat_lng_index.sql \
+            backend/migrations/week7_deleted_reports.sql; do
             echo "→ $f"
             psql -h localhost -U save_user -d hetusafe_test -f "$f"
           done
