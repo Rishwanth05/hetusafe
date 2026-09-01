@@ -1654,6 +1654,7 @@ export default function Landing() {
 
         .how-section {
           padding: 105px 0 65px;
+          overflow-x: hidden;
           background:
             radial-gradient(
               circle at 48% 0,
@@ -3197,6 +3198,7 @@ export default function Landing() {
           }
 
           .hero-inner {
+            overflow: hidden;
             padding-top: 92px;
           }
 
