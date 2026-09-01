@@ -688,10 +688,14 @@ export default function Landing() {
 
         html {
           scroll-behavior: smooth;
+          overflow-x: hidden;
+          max-width: 100%;
         }
 
         body {
           margin: 0;
+          overflow-x: hidden;
+          max-width: 100%;
         }
 
         button,
