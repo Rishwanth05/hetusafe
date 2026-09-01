@@ -269,6 +269,127 @@ describe('POST /api/v1/reports/:id/vote', () => {
   });
 });
 
+// ── Delete report ─────────────────────────────────────────────────────────────
+
+const OTHER_USER = { name: 'Other User', email: 'other@example.com', password: 'ValidPass1!' }
+
+describe('DELETE /api/v1/reports/:id', () => {
+  let accessToken, userId, reportId
+  let otherAccessToken
+
+  beforeEach(async () => {
+    ;({ accessToken, userId } = await createVerifiedUser())
+    ;({ accessToken: otherAccessToken } = await createVerifiedUser(OTHER_USER))
+    const createRes = await postReport(accessToken)
+    reportId = createRes.body.report.id
+  })
+
+  test('owner deletes their own report within 6 hours → 200', async () => {
+    const res = await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+    expect(res.status).toBe(200)
+  })
+
+  test('deleted report no longer appears in /all', async () => {
+    await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+
+    const allRes = await agent
+      .get('/api/v1/reports/all')
+      .set('Authorization', `Bearer ${accessToken}`)
+    expect(allRes.body.find(r => r.id === reportId)).toBeUndefined()
+  })
+
+  test('non-existent report returns 404', async () => {
+    const res = await agent
+      .delete('/api/v1/reports/99999')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+    expect(res.status).toBe(404)
+  })
+
+  test("deleting another user's report returns 403", async () => {
+    const res = await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${otherAccessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+    expect(res.status).toBe(403)
+  })
+
+  test('deleting a report older than 6 hours returns 403 with descriptive message', async () => {
+    await pool.query(
+      `UPDATE reports SET created_at = NOW() - INTERVAL '7 hours' WHERE id = $1`,
+      [reportId]
+    )
+    const res = await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+    expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/6 hours/i)
+  })
+
+  test('trust score is decremented by 10 after deletion', async () => {
+    const { rows: [{ trust_score: before }] } = await pool.query(
+      'SELECT trust_score FROM users WHERE id = $1',
+      [userId]
+    )
+    await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+    const { rows: [{ trust_score: after }] } = await pool.query(
+      'SELECT trust_score FROM users WHERE id = $1',
+      [userId]
+    )
+    expect(after).toBe(before - 10)
+  })
+
+  test('trust score floors at 0 when current score is below 10', async () => {
+    await pool.query('UPDATE users SET trust_score = 5 WHERE id = $1', [userId])
+    await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+    const { rows: [{ trust_score }] } = await pool.query(
+      'SELECT trust_score FROM users WHERE id = $1',
+      [userId]
+    )
+    expect(trust_score).toBe(0)
+  })
+
+  test('transaction: report removed from reports and archived in deleted_reports', async () => {
+    await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+
+    const { rows: inReports } = await pool.query(
+      'SELECT id FROM reports WHERE id = $1',
+      [reportId]
+    )
+    expect(inReports).toHaveLength(0)
+
+    const { rows: inDeleted } = await pool.query(
+      'SELECT id, deleted_by FROM deleted_reports WHERE id = $1',
+      [reportId]
+    )
+    expect(inDeleted).toHaveLength(1)
+    expect(inDeleted[0].deleted_by).toBe(userId)
+  })
+
+  test('unauthenticated delete returns 401', async () => {
+    const res = await agent
+      .delete(`/api/v1/reports/${reportId}`)
+      .set('X-CSRF-Token', csrfToken)
+    expect(res.status).toBe(401)
+  })
+})
+
 // ── Resolve ───────────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/reports/resolve', () => {

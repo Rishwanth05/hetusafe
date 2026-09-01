@@ -31,6 +31,7 @@ export default function Admin() {
   const [adminCategories, setAdminCategories] = useState([])
   const [catForm, setCatForm] = useState({ name: '', icon: '' })
   const [catMsg, setCatMsg] = useState('')
+  const [deletedReports, setDeletedReports] = useState([])
 
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/dashboard'); return }
@@ -43,7 +44,15 @@ export default function Admin() {
     if (tab === 'analytics') loadAnalytics()
     if (tab === 'audit') loadAuditLog()
     if (tab === 'categories') loadAdminCategories()
+    if (tab === 'deleted') loadDeletedReports()
   }, [tab, reportFilter])
+
+  const loadDeletedReports = async () => {
+    try {
+      const { data } = await client.get('/admin/reports/deleted')
+      setDeletedReports(data)
+    } catch { /* silently fail */ }
+  }
 
   const loadAuditLog = async () => {
     try {
@@ -166,7 +175,7 @@ export default function Admin() {
 
   if (loading) return <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#0f172a', color:'#fff', fontSize:'18px' }}>Loading admin panel…</div>
 
-  const navTabs = ['overview','analytics','users','reports','broadcast','audit','categories']
+  const navTabs = ['overview','analytics','users','reports','deleted','broadcast','audit','categories']
 
   return (
     <div style={{ minHeight:'100vh', background:'#0f172a', fontFamily:'system-ui,sans-serif' }}>
@@ -203,6 +212,7 @@ export default function Admin() {
               {t === 'analytics' && '📈 '}
               {t === 'users' && '👥 '}
               {t === 'reports' && '📋 '}
+              {t === 'deleted' && '🗑️ '}
               {t === 'broadcast' && '📢 '}
               {t === 'audit' && '🔍 '}
               {t === 'categories' && '🏷️ '}
@@ -548,6 +558,45 @@ export default function Admin() {
                             {cat.is_active ? 'Deactivate' : 'Activate'}
                           </button>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* DELETED REPORTS */}
+          {tab === 'deleted' && (
+            <div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', flexWrap:'wrap', gap:'10px' }}>
+                <h2 style={{ color:'#f1f5f9', fontSize:'20px', fontWeight:'800', margin:0 }}>
+                  🗑️ Deleted Reports (24h) <span style={{ color:'#64748b', fontWeight:'400' }}>({deletedReports.length})</span>
+                </h2>
+                <span style={{ fontSize:'12px', color:'#475569' }}>Read-only — auto-purged after 24 hours</span>
+              </div>
+              <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:'12px', overflow:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'13px', minWidth:'700px' }}>
+                  <thead>
+                    <tr style={{ background:'#334155' }}>
+                      {['ID','Type','Severity','Reporter','Email','Deleted At'].map(h => (
+                        <th key={h} style={{ padding:'10px 14px', textAlign:'left', color:'#94a3b8', fontWeight:'600' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deletedReports.length === 0 ? (
+                      <tr><td colSpan={6} style={{ padding:'24px', textAlign:'center', color:'#475569' }}>No deleted reports in the last 24 hours.</td></tr>
+                    ) : deletedReports.map(r => (
+                      <tr key={r.id} style={{ borderTop:'1px solid #334155' }}>
+                        <td style={{ padding:'10px 14px', color:'#64748b' }}>#{r.id}</td>
+                        <td style={{ padding:'10px 14px', color:'#f1f5f9', fontWeight:'500' }}>{r.hazard_type}</td>
+                        <td style={{ padding:'10px 14px' }}>
+                          <span style={{ background:'#334155', color:'#f1f5f9', padding:'2px 8px', borderRadius:'6px', fontSize:'11px', textTransform:'capitalize' }}>{r.severity}</span>
+                        </td>
+                        <td style={{ padding:'10px 14px', color:'#94a3b8' }}>{r.reporter_name || 'Anonymous'}</td>
+                        <td style={{ padding:'10px 14px', color:'#64748b' }}>{r.reporter_email || '—'}</td>
+                        <td style={{ padding:'10px 14px', color:'#64748b', whiteSpace:'nowrap' }}>{timeAgo(r.deleted_at)}</td>
                       </tr>
                     ))}
                   </tbody>

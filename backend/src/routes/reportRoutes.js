@@ -491,6 +491,76 @@ router.post("/check-duplicate", validate(checkDuplicateSchema), async (req, res)
   }
 });
 
+// DELETE /reports/:id — owner self-delete within the 6-hour window
+router.delete('/:id', verifyToken, async (req, res) => {
+  const reportId = parseInt(req.params.id, 10)
+  if (isNaN(reportId)) return res.status(400).json({ message: 'Invalid report ID' })
+
+  // Read-only checks before acquiring a transaction client
+  const { rows } = await pool.query('SELECT * FROM reports WHERE id = $1', [reportId])
+  if (rows.length === 0) return res.status(404).json({ message: 'Report not found' })
+
+  const report = rows[0]
+
+  if (report.user_id !== req.user.id) {
+    return res.status(403).json({ message: 'You can only delete your own reports' })
+  }
+
+  const ageMs = Date.now() - new Date(report.created_at).getTime()
+  if (ageMs > 6 * 60 * 60 * 1000) {
+    return res.status(403).json({ message: 'Reports can only be deleted within 6 hours of submission' })
+  }
+
+  let dbClient
+  try {
+    dbClient = await pool.connect()
+    await dbClient.query('BEGIN')
+
+    // Archive the report before removing it
+    await dbClient.query(
+      `INSERT INTO deleted_reports
+         (id, user_id, title, hazard_type, custom_description, severity, description,
+          latitude, longitude, location_method, image_url, status, confirmation_count,
+          flag_count, archived_at, created_at, resolved_at, deleted_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [report.id, report.user_id, report.title, report.hazard_type,
+       report.custom_description, report.severity, report.description,
+       report.latitude, report.longitude, report.location_method,
+       report.image_url, report.status, report.confirmation_count,
+       report.flag_count, report.archived_at, report.created_at,
+       report.resolved_at, req.user.id]
+    )
+
+    // Remove FK-dependent rows first (no CASCADE defined on these FKs)
+    await dbClient.query('DELETE FROM resolution_votes WHERE report_id = $1', [reportId])
+    await dbClient.query('DELETE FROM report_status_history WHERE report_id = $1', [reportId])
+    await dbClient.query('DELETE FROM reports WHERE id = $1', [reportId])
+
+    // Reverse the +10 trust credit from submission, flooring at 0
+    const scoreResult = await dbClient.query(
+      `UPDATE users SET trust_score = GREATEST(0, trust_score - 10) WHERE id = $1 RETURNING trust_score`,
+      [req.user.id]
+    )
+    const score = scoreResult.rows[0]?.trust_score ?? 0
+    const tier =
+      score >= 800 ? 'Hero' :
+      score >= 600 ? 'Guardian' :
+      score >= 400 ? 'Trusted' :
+      score >= 200 ? 'Reporter' : 'Newcomer'
+    await dbClient.query('UPDATE users SET badge_tier = $1 WHERE id = $2', [tier, req.user.id])
+
+    await dbClient.query('COMMIT')
+    try { await redis.del('reports:all') } catch {}
+
+    res.json({ message: 'Report deleted' })
+  } catch (err) {
+    if (dbClient) await dbClient.query('ROLLBACK').catch(() => {})
+    res.status(500).json({ error: err.message })
+  } finally {
+    if (dbClient) dbClient.release()
+  }
+})
+
 // GET /reports/:id/votes — fetch vote counts + user's own vote
 router.get('/:id/votes', verifyToken, async (req, res) => {
   try {
