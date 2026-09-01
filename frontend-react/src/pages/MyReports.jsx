@@ -48,6 +48,20 @@ export default function MyReports() {
     return () => clearInterval(id)
   }, [])
 
+  /* ── Delete handler ─────────────────────────────────────────────────── */
+  const canDelete = (createdAt) =>
+    Date.now() - new Date(createdAt).getTime() < 6 * 60 * 60 * 1000
+
+  const handleDelete = async (reportId) => {
+    if (!confirm('Permanently delete this report? This cannot be undone.')) return
+    try {
+      await client.delete(`/reports/${reportId}`)
+      setReports(prev => prev.filter(r => r.id !== reportId))
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete report')
+    }
+  }
+
   /* ── Derived lists ───────────────────────────────────────────────────── */
   const active   = reports.filter(r => r.status !== 'resolved')
   const resolved = reports.filter(r => r.status === 'resolved')
@@ -220,6 +234,17 @@ export default function MyReports() {
                         }`}>
                           {isResolved ? '✅ Resolved' : 'Active'}
                         </span>
+
+                        {/* Delete button — only within 6-hour submission window */}
+                        {canDelete(r.created_at) && (
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-danger bg-danger/10 border-danger/20 hover:bg-danger/20 transition-colors"
+                            aria-label="Delete report"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </Card>
                     )
                   })}

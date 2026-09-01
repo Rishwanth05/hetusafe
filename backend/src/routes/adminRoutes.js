@@ -172,6 +172,22 @@ router.get('/reports', async (req, res) => {
   }
 });
 
+// ── DELETED REPORTS (24-hour admin review window) ─────────────────────────────
+router.get('/reports/deleted', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT dr.*, u.name AS reporter_name, u.email AS reporter_email
+      FROM deleted_reports dr
+      LEFT JOIN users u ON dr.user_id = u.id
+      WHERE dr.deleted_at > NOW() - INTERVAL '24 hours'
+      ORDER BY dr.deleted_at DESC
+    `)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── UPDATE REPORT STATUS (ADMIN) ───────────────────────────────────────────────
 router.put('/reports/:id/status', async (req, res) => {
   try {
