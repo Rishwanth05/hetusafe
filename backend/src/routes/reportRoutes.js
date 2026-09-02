@@ -333,13 +333,14 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
 
     // Persist notification to DB so bell icon picks it up via polling
     pool.query(
-      `INSERT INTO notifications (title, message, severity, type, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
+      `INSERT INTO notifications (title, message, severity, type, report_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
       [
         `🚨 ${clean_hazard_type}`,
         `${severity} hazard reported nearby`,
         severity,
-        'proximity_alert'
+        'proximity_alert',
+        newReport.id,
       ]
     ).catch(err => console.error('Notification insert failed:', err.message))
 
@@ -437,14 +438,15 @@ router.post("/resolve", (req, res, next) => {
     const hazardType = reportOwner.rows[0]?.hazard_type || 'Hazard'
     if (ownerId) {
       pool.query(
-        `INSERT INTO notifications (title, message, severity, type, user_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        `INSERT INTO notifications (title, message, severity, type, user_id, report_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
         [
           `✅ Your ${hazardType} report was resolved`,
           `The ${hazardType} you reported has been marked as resolved by a community member`,
           'low',
           'resolved',
           ownerId,
+          report_id,
         ]
       ).catch(err => console.error('Resolution notification insert failed:', err.message))
 
