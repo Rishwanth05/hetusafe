@@ -29,6 +29,24 @@ export default function MyReports() {
       .finally(() => setLoading(false))
   }, [])
 
+  /* ── Refetch when the user returns to this tab (e.g. after resolving elsewhere) ── */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        client.get('/auth/my-reports')
+          .then(({ data }) => setReports(data))
+          .catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  /* ── Persist selected tab into location.state so a hard refresh lands on the same tab ── */
+  useEffect(() => {
+    navigate(location.pathname, { state: { ...location.state, tab }, replace: true })
+  }, [tab])
+
   useEffect(() => {
     if (!menuOpen) return
     const close = (e) => {
@@ -245,8 +263,19 @@ export default function MyReports() {
                             {isResolved ? '✅ Resolved' : 'Active'}
                           </span>
 
-                          {/* Delete button — only within 6-hour submission window */}
-                          {canDelete(r.created_at) && (
+                          {/* Mark as Resolved — navigates to Results and auto-opens the photo-upload modal */}
+                          {!isResolved && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/results?focus=${r.id}&action=resolve`) }}
+                              className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-accent bg-accent/10 border-accent/20 hover:bg-accent/20 transition-colors"
+                              aria-label="Mark as resolved"
+                            >
+                              ✅ Resolve
+                            </button>
+                          )}
+
+                          {/* Delete button — only within 6-hour window and only if not yet resolved */}
+                          {!isResolved && canDelete(r.created_at) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDelete(r.id) }}
                               className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-danger bg-danger/10 border-danger/20 hover:bg-danger/20 transition-colors"
