@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
 import { AppDrawer, BottomNav, Card, Button } from '../components/ui'
@@ -25,6 +26,8 @@ function timeAgo(dateStr) {
 }
 
 export default function Alerts() {
+  const navigate = useNavigate()
+
   /* ── Notification state (same API calls as NotificationCenter) ────────── */
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading]             = useState(true)
@@ -187,42 +190,54 @@ export default function Alerts() {
             {filtered.map(n => {
               const s = SEV[n.severity] || SEV.medium
               const isCritical = n.severity === 'critical'
+              const isClickable = !!n.report_id
               return (
-                <Card
+                <div
                   key={n.id}
-                  className={`flex items-start gap-3 p-4 ${isCritical ? 'border-danger/40' : ''}`}
-                  style={isCritical ? { background: 'rgba(239,68,68,0.05)' } : undefined}
+                  role={isClickable ? 'button' : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  className={isClickable ? 'cursor-pointer' : undefined}
+                  onClick={isClickable ? () => navigate(`/results?focus=${n.report_id}`) : undefined}
+                  onKeyDown={isClickable ? (e) => {
+                    if (e.key === 'Enter') navigate(`/results?focus=${n.report_id}`)
+                    if (e.key === ' ') { e.preventDefault(); navigate(`/results?focus=${n.report_id}`) }
+                  } : undefined}
                 >
-                  {/* Severity dot */}
-                  <div
-                    className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5"
-                    style={{ background: s.dot }}
-                    aria-hidden="true"
-                  />
-
-                  {/* Body */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className={`text-body font-bold leading-snug ${isCritical ? 'text-danger' : 'text-light'}`}>
-                        {n.title}
-                      </p>
-                      <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap shrink-0 ${s.cls}`}>
-                        {s.label}
-                      </span>
-                    </div>
-                    <p className="text-caption text-muted leading-relaxed mb-1.5">{n.message}</p>
-                    <p className="text-[11px] text-muted">{timeAgo(n.created_at)}</p>
-                  </div>
-
-                  {/* Delete button — 44×44px touch target */}
-                  <button
-                    onClick={() => handleDelete(n.id)}
-                    aria-label="Delete notification"
-                    className="w-11 h-11 -mt-2 -mr-2 shrink-0 flex items-center justify-center text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition-colors focus:outline-none"
+                  <Card
+                    className={`flex items-start gap-3 p-4 ${isCritical ? 'border-danger/40' : ''}`}
+                    style={isCritical ? { background: 'rgba(239,68,68,0.05)' } : undefined}
                   >
-                    ✕
-                  </button>
-                </Card>
+                    {/* Severity dot */}
+                    <div
+                      className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5"
+                      style={{ background: s.dot }}
+                      aria-hidden="true"
+                    />
+
+                    {/* Body */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className={`text-body font-bold leading-snug ${isCritical ? 'text-danger' : 'text-light'}`}>
+                          {n.title}
+                        </p>
+                        <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap shrink-0 ${s.cls}`}>
+                          {s.label}
+                        </span>
+                      </div>
+                      <p className="text-caption text-muted leading-relaxed mb-1.5">{n.message}</p>
+                      <p className="text-[11px] text-muted">{timeAgo(n.created_at)}</p>
+                    </div>
+
+                    {/* Delete button — 44×44px touch target */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(n.id) }}
+                      aria-label="Delete notification"
+                      className="w-11 h-11 -mt-2 -mr-2 shrink-0 flex items-center justify-center text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition-colors focus:outline-none"
+                    >
+                      ✕
+                    </button>
+                  </Card>
+                </div>
               )
             })}
           </div>
