@@ -390,6 +390,49 @@ describe('DELETE /api/v1/reports/:id', () => {
   })
 })
 
+// ── FCM payload shape ─────────────────────────────────────────────────────────
+
+describe('FCM payload shape — new-report sends push to nearby users', () => {
+  // The moduleNameMapper in jest.config.js maps 'config/firebase' to the jest.fn() mock,
+  // so this is the jest.fn() spy, not the real firebase-admin send.
+  const { sendPushNotification } = require('../config/firebase')
+
+  // Distinct email so this user doesn't collide with REPORTER or OTHER_USER.
+  const NEARBY_USER = { name: 'Nearby', email: 'nearby@example.com', password: 'ValidPass1!' }
+
+  beforeEach(() => {
+    sendPushNotification.mockClear()
+  })
+
+  test('new-report FCM payload carries type="new_report" and reportId', async () => {
+    // The reporter creates the report (no image — avoids the pre-existing dynamic
+    // import limitation that blocks image-processing in this test environment).
+    const { accessToken } = await createVerifiedUser()
+
+    // A second user positioned at the same coordinates as BASE_REPORT, within
+    // the 30-mile radius, with a stored FCM token.
+    const { userId: nearbyId } = await createVerifiedUser(NEARBY_USER)
+    await pool.query(
+      "UPDATE users SET fcm_token = 'nearby-fcm-token', last_lat = 12.9716, last_lng = 77.5946 WHERE id = $1",
+      [nearbyId]
+    )
+
+    const createRes = await postReport(accessToken)
+    expect(createRes.status).toBe(201)
+    const reportId = createRes.body.report.id
+
+    // The FCM broadcast is fire-and-forget; give the event loop a tick to settle.
+    await new Promise((r) => setTimeout(r, 200))
+
+    expect(sendPushNotification).toHaveBeenCalledWith(
+      'nearby-fcm-token',
+      expect.stringContaining('🚨'),
+      expect.any(String),
+      expect.objectContaining({ type: 'new_report', reportId: String(reportId) })
+    )
+  })
+})
+
 // ── Resolve ───────────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/reports/resolve', () => {
