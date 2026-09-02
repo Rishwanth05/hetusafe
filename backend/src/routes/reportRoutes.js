@@ -367,9 +367,8 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
         const notifBody = `${severity} hazard reported within 30 miles of you`;
         rows.forEach(({ fcm_token }) =>
           sendPushNotification(fcm_token, notifTitle, notifBody, {
+            type: 'new_report',
             reportId: String(newReport.id),
-            latitude: String(latitude),
-            longitude: String(longitude),
           })
         );
       })
@@ -448,6 +447,20 @@ router.post("/resolve", (req, res, next) => {
           ownerId,
         ]
       ).catch(err => console.error('Resolution notification insert failed:', err.message))
+
+      // FCM — push the reporter so they get an OS notification even when the app is closed
+      pool.query(
+        'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
+        [ownerId]
+      ).then(({ rows }) => {
+        if (!rows[0]?.fcm_token) return
+        sendPushNotification(
+          rows[0].fcm_token,
+          `✅ Your ${hazardType} report was resolved`,
+          `The ${hazardType} you reported has been marked as resolved by a community member`,
+          { type: 'resolved', reportId: String(report_id) }
+        )
+      }).catch(err => console.error('Resolve FCM query failed:', err.message))
     }
 
     res.json({ message: "Report resolved ✅", proofUrl: proof_url });
