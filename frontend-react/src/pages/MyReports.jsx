@@ -196,56 +196,67 @@ export default function MyReports() {
                   {groupReports.map(r => {
                     const isResolved = r.status === 'resolved'
                     return (
-                      <Card
+                      <div
                         key={r.id}
-                        className={`p-4 flex items-center gap-4 ${isResolved ? 'border-accent/30' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        className="w-full text-left block"
+                        onClick={() => navigate(`/results?focus=${r.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') navigate(`/results?focus=${r.id}`)
+                          if (e.key === ' ') { e.preventDefault(); navigate(`/results?focus=${r.id}`) }
+                        }}
                       >
-                        {/* Thumbnail */}
-                        {r.image_url
-                          ? <img
-                              src={r.image_url}
-                              alt="hazard"
-                              className="w-14 h-14 object-cover rounded-xl shrink-0"
-                            />
-                          : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
-                              🚧
+                        <Card
+                          className={`p-4 flex items-center gap-4 transition-colors hover:border-accent/40 ${isResolved ? 'border-accent/30' : ''}`}
+                        >
+                          {/* Thumbnail */}
+                          {r.image_url
+                            ? <img
+                                src={r.image_url}
+                                alt="hazard"
+                                className="w-14 h-14 object-cover rounded-xl shrink-0"
+                              />
+                            : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
+                                🚧
+                              </div>
+                          }
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
+                              <PriorityBadge level={r.severity} />
                             </div>
-                        }
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
-                            <PriorityBadge level={r.severity} />
+                            <p className="text-caption text-muted mb-1 leading-relaxed truncate">
+                              {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
+                            </p>
+                            <p className="text-[11px] text-muted">
+                              {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
                           </div>
-                          <p className="text-caption text-muted mb-1 leading-relaxed truncate">
-                            {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
-                          </p>
-                          <p className="text-[11px] text-muted">
-                            {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        </div>
 
-                        {/* Status pill */}
-                        <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
-                          isResolved
-                            ? 'text-accent bg-accent/10 border-accent/20'
-                            : 'text-warn bg-warn/10 border-warn/20'
-                        }`}>
-                          {isResolved ? '✅ Resolved' : 'Active'}
-                        </span>
+                          {/* Status pill */}
+                          <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
+                            isResolved
+                              ? 'text-accent bg-accent/10 border-accent/20'
+                              : 'text-warn bg-warn/10 border-warn/20'
+                          }`}>
+                            {isResolved ? '✅ Resolved' : 'Active'}
+                          </span>
 
-                        {/* Delete button — only within 6-hour submission window */}
-                        {canDelete(r.created_at) && (
-                          <button
-                            onClick={() => handleDelete(r.id)}
-                            className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-danger bg-danger/10 border-danger/20 hover:bg-danger/20 transition-colors"
-                            aria-label="Delete report"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </Card>
+                          {/* Delete button — only within 6-hour submission window */}
+                          {canDelete(r.created_at) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDelete(r.id) }}
+                              className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-danger bg-danger/10 border-danger/20 hover:bg-danger/20 transition-colors"
+                              aria-label="Delete report"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </Card>
+                      </div>
                     )
                   })}
                 </div>

@@ -32,7 +32,7 @@ function reportsToGeoJSON(reports) {
   }
 }
 
-export default function Map({ reports = [], onLocationSelect, center = [-98.5, 39.5], zoom = 4, showHeatmapToggle = false }) {
+export default function Map({ reports = [], onLocationSelect, center = [-98.5, 39.5], zoom = 4, showHeatmapToggle = false, focusCoords = null }) {
   const mapContainer = useRef(null)
   const mapRef = useRef(null)
   const popupRef = useRef(null)
@@ -202,6 +202,12 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
       mapRef.current = null
     }
   }, [])
+
+  // Fly to a specific report when focusCoords changes (e.g. from a push notification deep-link)
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !focusCoords) return
+    mapRef.current.flyTo({ center: [focusCoords.lng, focusCoords.lat], zoom: 15, duration: 900 })
+  }, [focusCoords, mapReady])
 
   // Update GeoJSON data when reports change
   useEffect(() => {
