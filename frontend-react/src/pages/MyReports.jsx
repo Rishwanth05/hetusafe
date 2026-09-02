@@ -226,63 +226,63 @@ export default function MyReports() {
                         }}
                       >
                         <Card
-                          className={`p-4 flex items-center gap-4 transition-colors hover:border-accent/40 ${isResolved ? 'border-accent/30' : ''}`}
+                          className={`p-4 flex flex-col gap-3 transition-colors hover:border-accent/40 ${isResolved ? 'border-accent/30' : ''}`}
                         >
-                          {/* Thumbnail */}
-                          {r.image_url
-                            ? <img
-                                src={r.image_url}
-                                alt="hazard"
-                                className="w-14 h-14 object-cover rounded-xl shrink-0"
-                              />
-                            : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
-                                🚧
-                              </div>
-                          }
-
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <strong className="text-body text-light font-bold truncate">{r.hazard_type}</strong>
-                              <PriorityBadge level={r.severity} />
+                          {/* Row 1: thumbnail + title / description / date */}
+                          <div className="flex items-start gap-4">
+                            {r.image_url
+                              ? <img
+                                  src={r.image_url}
+                                  alt="hazard"
+                                  className="w-14 h-14 object-cover rounded-xl shrink-0"
+                                />
+                              : <div className="w-14 h-14 bg-elevated rounded-xl flex items-center justify-center text-2xl shrink-0" aria-hidden="true">
+                                  🚧
+                                </div>
+                            }
+                            <div className="flex-1 min-w-0">
+                              <strong className="text-body text-light font-bold truncate block mb-1">{r.hazard_type}</strong>
+                              <p className="text-caption text-muted mb-1 leading-relaxed truncate">
+                                {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
+                              </p>
+                              <p className="text-[11px] text-muted">
+                                {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
                             </div>
-                            <p className="text-caption text-muted mb-1 leading-relaxed truncate">
-                              {r.description?.slice(0, 80)}{r.description?.length > 80 ? '…' : ''}
-                            </p>
-                            <p className="text-[11px] text-muted">
-                              {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </p>
                           </div>
 
-                          {/* Status pill */}
-                          <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
-                            isResolved
-                              ? 'text-accent bg-accent/10 border-accent/20'
-                              : 'text-warn bg-warn/10 border-warn/20'
-                          }`}>
-                            {isResolved ? '✅ Resolved' : 'Active'}
-                          </span>
+                          {/* Row 2: severity badge + status pill */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <PriorityBadge level={r.severity} />
+                            <span className={`text-caption font-semibold px-2.5 py-1 rounded-full border shrink-0 ${
+                              isResolved
+                                ? 'text-accent bg-accent/10 border-accent/20'
+                                : 'text-warn bg-warn/10 border-warn/20'
+                            }`}>
+                              {isResolved ? '✅ Resolved' : 'Active'}
+                            </span>
+                          </div>
 
-                          {/* Mark as Resolved — navigates to Results and auto-opens the photo-upload modal */}
+                          {/* Row 3: action buttons — active reports only */}
                           {!isResolved && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); navigate(`/results?focus=${r.id}&action=resolve`) }}
-                              className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-accent bg-accent/10 border-accent/20 hover:bg-accent/20 transition-colors"
-                              aria-label="Mark as resolved"
-                            >
-                              ✅ Resolve
-                            </button>
-                          )}
-
-                          {/* Delete button — only within 6-hour window and only if not yet resolved */}
-                          {!isResolved && canDelete(r.created_at) && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDelete(r.id) }}
-                              className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-danger bg-danger/10 border-danger/20 hover:bg-danger/20 transition-colors"
-                              aria-label="Delete report"
-                            >
-                              Delete
-                            </button>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/results?focus=${r.id}&action=resolve`) }}
+                                className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-accent bg-accent/10 border-accent/20 hover:bg-accent/20 transition-colors"
+                                aria-label="Mark as resolved"
+                              >
+                                ✅ Resolve
+                              </button>
+                              {canDelete(r.created_at) && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDelete(r.id) }}
+                                  className="shrink-0 text-caption font-semibold px-2.5 py-1 rounded-full border text-danger bg-danger/10 border-danger/20 hover:bg-danger/20 transition-colors"
+                                  aria-label="Delete report"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
                           )}
                         </Card>
                       </div>
