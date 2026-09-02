@@ -382,7 +382,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
   }
 });
 
-router.post("/resolve", (req, res, next) => {
+router.post("/resolve", verifyToken, (req, res, next) => {
   upload.single('proof')(req, res, (err) => {
     if (err) {
       console.error('Multer error (resolve):', err)

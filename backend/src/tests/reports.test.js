@@ -64,10 +64,13 @@ function postReport(accessToken) {
 }
 
 // Sends POST /resolve with a valid proof image for the given report.
-function resolveReport(reportId) {
-  return agent
+// Pass accessToken to authenticate; omit (or pass undefined) to test the 401 path.
+function resolveReport(reportId, accessToken) {
+  const req = agent
     .post('/api/v1/reports/resolve')
     .set('X-CSRF-Token', csrfToken)
+  if (accessToken) req.set('Authorization', `Bearer ${accessToken}`)
+  return req
     .field('report_id', String(reportId))
     .attach('proof', testJpegBuffer, { filename: 'proof.jpg', contentType: 'image/jpeg' });
 }
@@ -449,7 +452,7 @@ describe('POST /api/v1/reports/resolve', () => {
       rows: [{ trust_score: scoreBefore }],
     } = await pool.query('SELECT trust_score FROM users WHERE id = $1', [userId]);
 
-    await resolveReport(reportId);
+    await resolveReport(reportId, accessToken);
 
     const {
       rows: [{ trust_score: scoreAfter }],
@@ -466,7 +469,7 @@ describe('POST /api/v1/reports/resolve', () => {
       },
     } = await postReport(accessToken);
 
-    const res = await resolveReport(reportId);
+    const res = await resolveReport(reportId, accessToken);
     expect(res.status).toBe(200);
 
     // The INSERT is fire-and-forget inside the route; give the event loop a
@@ -481,7 +484,7 @@ describe('POST /api/v1/reports/resolve', () => {
     expect(rows[0].type).toBe('resolved');
   });
 
-  test('unauthenticated /resolve succeeds — documents missing auth gap', async () => {
+  test('unauthenticated /resolve returns 401', async () => {
     const { accessToken } = await createVerifiedUser();
     const {
       body: {
@@ -489,9 +492,9 @@ describe('POST /api/v1/reports/resolve', () => {
       },
     } = await postReport(accessToken);
 
-    // resolveReport() sends no Authorization header; /resolve has no verifyToken
+    // resolveReport() sends no Authorization header; verifyToken now rejects it
     const res = await resolveReport(reportId);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   test('resolve without a proof image returns 400', async () => {
@@ -504,6 +507,7 @@ describe('POST /api/v1/reports/resolve', () => {
 
     const res = await agent
       .post('/api/v1/reports/resolve')
+      .set('Authorization', `Bearer ${accessToken}`)
       .set('X-CSRF-Token', csrfToken)
       .field('report_id', String(reportId));
 
