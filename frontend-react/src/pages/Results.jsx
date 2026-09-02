@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Map from '../components/Map'
 import client from '../api/client'
@@ -353,6 +353,7 @@ export default function Results() {
   const navigate = useNavigate()
   const { state: routeState } = useLocation()
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
 
   // ── All existing state (unchanged) ─────────────────────────────────────
   const [reports, setReports]               = useState([])
@@ -363,6 +364,7 @@ export default function Results() {
   const [resolveTarget, setResolveTarget]   = useState(null)
   const [viewProofTarget, setViewProofTarget] = useState(null)
   const [areaFilter, setAreaFilter]         = useState(null)
+  const [focusCoords, setFocusCoords]       = useState(null)
   const [showAreaPanel, setShowAreaPanel]   = useState(false)
   const [mapLocationInput, setMapLocationInput] = useState('')
   const [mapSearching, setMapSearching]         = useState(false)
@@ -373,6 +375,10 @@ export default function Results() {
   const drawerRef  = useRef(null)
   const [unreadCount, setUnreadCount] = useState(0)
 
+  // Deep-link: ?focus=<reportId> — fly the map to that pin and open proof if resolved.
+  // Derived outside the effect so it's a stable primitive dep (searchParams don't change here).
+  const focusId = searchParams.get('focus')
+
   // ── All existing useEffects (unchanged) ────────────────────────────────
   useEffect(() => {
     client.get('/reports/all')
@@ -380,6 +386,15 @@ export default function Results() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (loading || !reports.length || !focusId) return
+    const report = reports.find(r => String(r.id) === focusId)
+    if (!report) return
+    setView('map')
+    setFocusCoords({ lng: parseFloat(report.longitude), lat: parseFloat(report.latitude) })
+    if (report.status === 'resolved') setViewProofTarget(report)
+  }, [loading, reports, focusId])
 
   useEffect(() => {
     let result = reports
@@ -683,6 +698,7 @@ export default function Results() {
                     zoom={areaFilter ? 10 : 5}
                     center={areaFilter ? [areaFilter.lng, areaFilter.lat] : undefined}
                     showHeatmapToggle
+                    focusCoords={focusCoords}
                   />
               }
             </div>

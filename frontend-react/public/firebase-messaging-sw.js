@@ -24,3 +24,23 @@ messaging.onBackgroundMessage((payload) => {
     data: payload.data || {},
   });
 });
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const { reportId } = event.notification.data || {};
+  const url = reportId ? `/results?focus=${reportId}` : '/dashboard';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // If the app is already open in a tab, focus it and navigate there.
+      for (const client of windowClients) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.focus();
+          return client.navigate(url);
+        }
+      }
+      // App is closed — open a new window.
+      return clients.openWindow(url);
+    })
+  );
+});
