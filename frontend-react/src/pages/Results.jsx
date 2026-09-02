@@ -376,8 +376,10 @@ export default function Results() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   // Deep-link: ?focus=<reportId> — fly the map to that pin and open proof if resolved.
-  // Derived outside the effect so it's a stable primitive dep (searchParams don't change here).
-  const focusId = searchParams.get('focus')
+  // ?action=resolve — additionally auto-opens the photo-upload modal for that report.
+  // Both derived outside the effect as stable primitives (searchParams don't change here).
+  const focusId    = searchParams.get('focus')
+  const actionParam = searchParams.get('action')
 
   // ── All existing useEffects (unchanged) ────────────────────────────────
   useEffect(() => {
@@ -394,7 +396,8 @@ export default function Results() {
     setView('map')
     setFocusCoords({ lng: parseFloat(report.longitude), lat: parseFloat(report.latitude) })
     if (report.status === 'resolved') setViewProofTarget(report)
-  }, [loading, reports, focusId])
+    else if (actionParam === 'resolve') setResolveTarget(report)
+  }, [loading, reports, focusId, actionParam])
 
   useEffect(() => {
     let result = reports

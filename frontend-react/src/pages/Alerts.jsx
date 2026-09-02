@@ -12,11 +12,6 @@ const SEV = {
   critical: { dot: '#ef4444', cls: 'text-danger  bg-danger/10  border-danger/25',  label: 'CRITICAL' },
 }
 
-const TABS = [
-  { id: 'all',     label: 'All'     },
-  { id: 'updates', label: 'Updates' },
-]
-
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr)) / 1000
   if (diff < 60)    return 'just now'
@@ -31,7 +26,6 @@ export default function Alerts() {
   /* ── Notification state (same API calls as NotificationCenter) ────────── */
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading]             = useState(true)
-  const [tab, setTab]                     = useState('all')
 
   /* ── Top-bar / drawer state ───────────────────────────────────────────── */
   const [menuOpen, setMenuOpen]         = useState(false)
@@ -90,11 +84,7 @@ export default function Alerts() {
     } catch {}
   }
 
-  /* ── Tab filter ──────────────────────────────────────────────────────── */
-  const filtered = notifications.filter(n => {
-    if (tab === 'updates') return n.type !== 'mention'
-    return true
-  })
+  const filtered = notifications
 
   /* ── Render ──────────────────────────────────────────────────────────── */
   return (
@@ -151,26 +141,6 @@ export default function Alerts() {
           )}
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 bg-surface border border-edge rounded-2xl p-1 mb-5 w-fit">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-xl text-body font-semibold transition-all focus:outline-none ${
-                tab === t.id
-                  ? 'bg-elevated text-light shadow-sm'
-                  : 'text-muted hover:text-light'
-              }`}
-            >
-              {t.label}
-              {t.id === 'all' && notifications.length > 0 && (
-                <span className="ml-1.5 text-caption text-muted">({notifications.length})</span>
-              )}
-            </button>
-          ))}
-        </div>
-
         {/* Content */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -181,9 +151,7 @@ export default function Alerts() {
           <Card className="py-16 text-center">
             <p className="text-4xl mb-3" aria-hidden="true">✅</p>
             <p className="text-section font-semibold text-light mb-1">All caught up!</p>
-            <p className="text-body text-muted">
-              {tab === 'all' ? 'No notifications yet.' : 'No hazard updates yet.'}
-            </p>
+            <p className="text-body text-muted">No notifications yet.</p>
           </Card>
         ) : (
           <div className="space-y-2">
