@@ -36,11 +36,8 @@ export default function Terms() {
       {/* Nav */}
       <div style={{ background: 'rgba(10,15,30,0.92)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9', fontFamily: 'inherit', padding: 0 }}>
-          <svg width="22" height="22" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
-            <rect width="56" height="56" rx="12" fill="#16a34a"/>
-            <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
-          </svg>
-          <span style={{ fontWeight: '700', fontSize: '15px' }}>Hetusafe</span>
+          <img src="/favicon-192.png" width="24" height="24" alt="HetuSafe" style={{ flexShrink: 0 }} />
+          <span style={{ fontWeight: '700', fontSize: '15px' }}>HetuSafe</span>
         </button>
         <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 14px', color: '#94a3b8', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
       </div>
@@ -71,23 +68,23 @@ export default function Terms() {
           <div style={{ marginBottom: '48px' }}>
             <div style={{ display: 'inline-block', background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.2)', color: '#4ade80', fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', padding: '4px 14px', borderRadius: '999px', marginBottom: '16px' }}>Legal</div>
             <h1 style={{ fontSize: '38px', fontWeight: '900', letterSpacing: '-1px', marginBottom: '10px' }}>Terms of Service</h1>
-            <p style={{ color: '#64748b', fontSize: '14px' }}>Last updated: 28 May 2026 · Effective: 28 May 2026</p>
+            <p style={{ color: '#64748b', fontSize: '14px' }}>Last updated: 3 September 2026 · Effective: 3 September 2026</p>
           </div>
 
           <Section id="acceptance" title="Acceptance of Terms">
-            <p>By creating an account or using Hetusafe ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Service.</p>
-            <p>These Terms constitute a legally binding agreement between you and Hetusafe. We reserve the right to update these Terms at any time. Continued use after changes constitutes acceptance.</p>
+            <p>By creating an account or using HetuSafe ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Service.</p>
+            <p>These Terms constitute a legally binding agreement between you and HetuSafe. We reserve the right to update these Terms at any time. Continued use after changes constitutes acceptance.</p>
           </Section>
 
           <Section id="service" title="Description of Service">
-            <p>Hetusafe is a community hazard reporting platform that allows residents to:</p>
+            <p>HetuSafe is a community hazard reporting platform that allows residents to:</p>
             <ul>
               <li>Submit geo-tagged reports of public safety hazards</li>
               <li>View hazard reports on an interactive map</li>
               <li>Track the resolution status of submitted reports</li>
               <li>Receive notifications about hazards in their area</li>
             </ul>
-            <p>The Service is provided "as is." We do not guarantee reports will be acted upon by any government authority. Hetusafe is not a substitute for emergency services — call 911 for life-threatening emergencies.</p>
+            <p>The Service is provided "as is." We do not guarantee reports will be acted upon by any government authority. HetuSafe is not a substitute for emergency services — call 911 for life-threatening emergencies.</p>
             <Callout>🚨 In case of an emergency, call 911 immediately. Do not submit a report as a substitute for emergency services.</Callout>
           </Section>
 
@@ -106,9 +103,9 @@ export default function Terms() {
             <p>When you submit a report, photo, or any other content to the Service ("User Content"), you:</p>
             <ul>
               <li>Retain ownership of your content</li>
-              <li>Grant Hetusafe a worldwide, non-exclusive, royalty-free licence to store, display, and distribute your content as part of operating the Service</li>
+              <li>Grant HetuSafe a worldwide, non-exclusive, royalty-free licence to store, display, and distribute your content as part of operating the Service</li>
               <li>Confirm the content is accurate to the best of your knowledge</li>
-              <li>Accept that report locations and hazard descriptions are visible to other authenticated users and municipality partners</li>
+              <li>Accept that report locations and hazard descriptions are visible to other authenticated users of the platform</li>
             </ul>
             <SubHeading>Content standards</SubHeading>
             <p>All submitted content must be:</p>
@@ -129,27 +126,21 @@ export default function Terms() {
               <li>Attempt to gain unauthorised access to the Service or its infrastructure</li>
               <li>Use automated bots, scrapers, or scripts without prior written consent</li>
               <li>Circumvent security features, rate limits, or access controls</li>
-              <li>Impersonate government officials, municipality workers, or Hetusafe staff</li>
+              <li>Impersonate government officials or HetuSafe staff</li>
               <li>Upload content containing malware, viruses, or malicious code</li>
             </ul>
             <p>Violations may result in immediate account termination and, where applicable, reporting to law enforcement.</p>
           </Section>
 
           <Section id="payments" title="Pricing">
-            <p>Hetusafe is currently free to use. There are no paid tiers at this time. Contact us at arishwanthreddy@gmail.com with any questions.</p>
+            <p>The Service is currently provided at no charge. HetuSafe does not collect or process payment information. We reserve the right to introduce optional paid features in the future; if pricing changes, we will provide advance notice to existing users. Contact us at arishwanthreddy@gmail.com with any questions.</p>
           </Section>
 
           <Section id="liability" title="Limitation of Liability">
-            <p>To the maximum extent permitted by law, Hetusafe and its operators shall not be liable for:</p>
-            <ul>
-              <li>Indirect, incidental, special, or consequential damages</li>
-              <li>Loss of profits, data, goodwill, or other intangible losses</li>
-              <li>Any harm arising from your reliance on report accuracy</li>
-              <li>Failure of government authorities to act on submitted reports</li>
-              <li>Service interruptions, data loss, or security breaches beyond our reasonable control</li>
-            </ul>
-            <p>To the maximum extent permitted by applicable law, our total cumulative liability for any claim shall not exceed $100 USD. As the Service is currently provided free of charge, no other payment-based cap applies.</p>
-            <p>Hetusafe does not guarantee the accuracy, completeness, or timeliness of any report. The Service is informational only.</p>
+            <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTY OF ANY KIND. TO THE EXTENT PERMITTED BY APPLICABLE LAW, HETUSAFE AND ITS OPERATORS DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.</p>
+            <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, HETUSAFE AND ITS OPERATORS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES — INCLUDING LOSS OF PROFITS, LOSS OF DATA, LOSS OF GOODWILL, OR OTHER INTANGIBLE LOSSES — ARISING FROM YOUR USE OF OR INABILITY TO USE THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THIS INCLUDES, WITHOUT LIMITATION, ANY HARM ARISING FROM RELIANCE ON REPORT ACCURACY, FAILURE OF ANY AUTHORITY TO ACT ON A REPORT, OR SERVICE INTERRUPTIONS BEYOND OUR REASONABLE CONTROL.</p>
+            <p>OUR TOTAL CUMULATIVE LIABILITY FOR ALL CLAIMS ARISING UNDER THESE TERMS SHALL NOT EXCEED $100 USD.</p>
+            <p>HetuSafe is an informational platform. We do not guarantee the accuracy, completeness, or timeliness of any submitted report, and we are not responsible for any action or inaction by any government authority in response to a report.</p>
           </Section>
 
           <Section id="termination" title="Termination">
@@ -165,7 +156,7 @@ export default function Terms() {
           <Section id="contact" title="Contact">
             <p>For questions about these Terms:</p>
             <ul>
-              <li><strong>Email:</strong> legal@hetusafe.com</li>
+              <li><strong>Email:</strong> arishwanthreddy@gmail.com</li>
               <li><strong>Response time:</strong> Within 5 business days</li>
             </ul>
           </Section>
