@@ -7,7 +7,7 @@ const SECTIONS = [
   { id: 'how-we-use', title: 'How We Use It' },
   { id: 'sharing', title: 'Data Sharing' },
   { id: 'storage', title: 'Storage & Security' },
-  { id: 'your-rights', title: 'Your Rights (GDPR)' },
+  { id: 'your-rights', title: 'Your Rights' },
   { id: 'cookies', title: 'Cookies' },
   { id: 'children', title: 'Children' },
   { id: 'changes', title: 'Policy Changes' },
@@ -36,11 +36,8 @@ export default function Privacy() {
       {/* Nav */}
       <div style={{ background: 'rgba(10,15,30,0.92)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9', fontFamily: 'inherit', padding: 0 }}>
-          <svg width="22" height="22" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
-            <rect width="56" height="56" rx="12" fill="#16a34a"/>
-            <path d="M28 10L14 16V28C14 36.4 20.2 44.2 28 46C35.8 44.2 42 36.4 42 28V16L28 10Z" fill="white"/>
-          </svg>
-          <span style={{ fontWeight: '700', fontSize: '15px' }}>Hetusafe</span>
+          <img src="/favicon-192.png" width="24" height="24" alt="HetuSafe" style={{ flexShrink: 0 }} />
+          <span style={{ fontWeight: '700', fontSize: '15px' }}>HetuSafe</span>
         </button>
         <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 14px', color: '#94a3b8', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
       </div>
@@ -71,12 +68,12 @@ export default function Privacy() {
           <div style={{ marginBottom: '48px' }}>
             <div style={{ display: 'inline-block', background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.2)', color: '#4ade80', fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', padding: '4px 14px', borderRadius: '999px', marginBottom: '16px' }}>Legal</div>
             <h1 style={{ fontSize: '38px', fontWeight: '900', letterSpacing: '-1px', marginBottom: '10px' }}>Privacy Policy</h1>
-            <p style={{ color: '#64748b', fontSize: '14px' }}>Last updated: 28 May 2026 · Effective: 28 May 2026</p>
+            <p style={{ color: '#64748b', fontSize: '14px' }}>Last updated: 3 September 2026 · Effective: 3 September 2026</p>
           </div>
 
           <Section id="overview" title="Overview">
-            <p>Hetusafe ("we", "our", or "us") operates the Hetusafe web application accessible at <strong>hetusafe.com</strong>. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our service.</p>
-            <p>By using Hetusafe, you agree to the practices described in this policy. If you do not agree, please do not use our service.</p>
+            <p>HetuSafe ("we", "our", or "us") operates the HetuSafe web application accessible at <strong>hetusafe.com</strong>. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our service.</p>
+            <p>By using HetuSafe, you agree to the practices described in this policy. If you do not agree, please do not use our service.</p>
           </Section>
 
           <Section id="data-collected" title="Data We Collect">
@@ -84,7 +81,7 @@ export default function Privacy() {
             <SubHeading>Account information</SubHeading>
             <ul>
               <li>Name and email address (required for registration)</li>
-              <li>Password stored as a bcrypt hash — we never store plain-text passwords</li>
+              <li>Passwords are securely hashed and never stored in plain text</li>
               <li>Account role (user or admin)</li>
               <li>Trust score and badge tier (earned through reporting and resolution activity)</li>
               <li>Emergency contacts (name, phone, relation) — only if you choose to add them in your profile</li>
@@ -93,7 +90,7 @@ export default function Privacy() {
             <ul>
               <li>Hazard type, description, and severity level</li>
               <li>GPS coordinates or manually entered address</li>
-              <li>Photos uploaded to AWS S3 (EXIF metadata stripped on upload)</li>
+              <li>Photos and other content you choose to submit</li>
               <li>Timestamp of submission</li>
             </ul>
             <SubHeading>Usage data</SubHeading>
@@ -105,7 +102,7 @@ export default function Privacy() {
           </Section>
 
           <Section id="how-we-use" title="How We Use It">
-            <p>We use collected data solely to operate and improve Hetusafe:</p>
+            <p>We use collected data solely to operate and improve HetuSafe:</p>
             <ul>
               <li><strong>To provide the service</strong> — display reports on the map, send OTP emails, manage account status</li>
               <li><strong>To communicate with you</strong> — status update notifications, security alerts, OTP codes</li>
@@ -119,40 +116,35 @@ export default function Privacy() {
           <Section id="sharing" title="Data Sharing">
             <p>We only share your data with the following categories of recipients:</p>
             <ul>
-              <li><strong>Infrastructure providers</strong> — AWS S3 (photo storage), Vercel (frontend hosting), Render (backend hosting), PostgreSQL (database)</li>
-              <li><strong>Email delivery</strong> — SendGrid, used exclusively to send OTP verification codes, password reset links, and contact-form responses</li>
-              <li><strong>Push notifications</strong> — Firebase Cloud Messaging (FCM), used to send hazard proximity alerts to opted-in devices</li>
-              <li><strong>Analytics</strong> — PostHog (page-view and interaction analytics, when enabled) and Sentry (error monitoring, when enabled)</li>
+              <li><strong>Infrastructure providers</strong> — Cloud hosting, compute, and secure object storage providers used to operate the platform</li>
+              <li><strong>Email delivery</strong> — Email service providers, used to send verification codes, security notifications, and respond to inquiries</li>
+              <li><strong>Push notifications</strong> — Push notification service providers, used to send hazard proximity alerts to opted-in devices</li>
+              <li><strong>Analytics and monitoring</strong> — Analytics and error-monitoring service providers, used to improve reliability and understand feature usage</li>
             </ul>
-            <p>Hetusafe does <strong>not</strong> share report data with any government agency, municipality, or third-party authority. Reports are visible only to authenticated users of the Hetusafe platform — this is the core function of the service. Your email address is never displayed publicly; your display name is shown alongside your submitted reports.</p>
-            <p>Hetusafe has <strong>no payment functionality</strong>. We do not collect, process, or share any payment or financial information.</p>
+            <p>HetuSafe does <strong>not</strong> share report data with any government agency or third-party authority. Reports are visible only to authenticated users of the HetuSafe platform — this is the core function of the service. Your email address is never displayed publicly; your display name is shown alongside your submitted reports.</p>
+            <p>HetuSafe has <strong>no payment functionality</strong>. We do not collect, process, or share any payment or financial information.</p>
           </Section>
 
           <Section id="storage" title="Storage & Security">
-            <p>Your data is stored on servers located in the United States (AWS us-east-1). We implement the following security measures:</p>
-            <ul>
-              <li>All data in transit encrypted via TLS 1.2+</li>
-              <li>Passwords hashed with bcrypt (cost factor 12)</li>
-              <li>JWT access tokens signed with HMAC-SHA256 (HS256), expire after 15 minutes</li>
-              <li>JWT access tokens invalidated on logout via a Redis-backed token blacklist</li>
-              <li>CSRF protection on all state-changing routes</li>
-              <li>XSS input sanitisation on all user-provided text</li>
-              <li>Rate limiting on all API routes</li>
-            </ul>
+            <p>Your data is stored on servers located in the United States. We use reasonable administrative, technical, and organizational safeguards designed to protect personal information against unauthorized access, loss, misuse, or alteration.</p>
             <p>We retain your account data for as long as your account is active. Deleted accounts are removed within 30 days. Anonymised report data may be retained indefinitely for aggregate statistics.</p>
           </Section>
 
-          <Section id="your-rights" title="Your Rights (GDPR)">
-            <p>If you are located in the European Economic Area, you have the following rights under GDPR:</p>
+          <Section id="your-rights" title="Your Rights">
+            <p>HetuSafe honors the following privacy rights for all users. Applicable law may grant you additional rights depending on your location.</p>
             <ul>
-              <li><strong>Access</strong> — Request a copy of all personal data we hold about you</li>
-              <li><strong>Rectification</strong> — Correct inaccurate personal data</li>
-              <li><strong>Erasure</strong> — Request deletion of your account and associated data</li>
-              <li><strong>Portability</strong> — Receive your data in a machine-readable format (JSON/CSV)</li>
-              <li><strong>Restriction</strong> — Request we stop processing your data in certain circumstances</li>
-              <li><strong>Objection</strong> — Object to processing based on legitimate interests</li>
+              <li><strong>Access</strong> — Request information about the personal data we hold about you and how it is used</li>
+              <li><strong>Correction</strong> — Request that we correct inaccurate or incomplete personal data</li>
+              <li><strong>Deletion</strong> — Request deletion of your account and associated personal data</li>
+              <li><strong>Portability</strong> — Receive a copy of your personal data in a machine-readable format</li>
+              <li><strong>Opt-out of sale</strong> — HetuSafe does not sell or share personal information for commercial or advertising purposes</li>
+              <li><strong>Non-discrimination</strong> — We will not deny or degrade the Service because you exercised a privacy right</li>
             </ul>
-            <p>To exercise these rights, use the account deletion flow in your Profile page, or contact us at <strong>arishwanthreddy@gmail.com</strong> <em style={{ color: '#64748b', fontSize: '13px' }}>(Temporary contact — dedicated support email coming soon with our domain launch)</em>. We will respond within 30 days.</p>
+            <SubHeading>EEA and UK residents (GDPR)</SubHeading>
+            <p>If you are located in the European Economic Area or United Kingdom, you have additional rights under the General Data Protection Regulation, including the right to restrict or object to certain processing, and the right to lodge a complaint with your local supervisory authority.</p>
+            <SubHeading>California residents (CCPA / CPRA)</SubHeading>
+            <p>If you are a California resident, you have rights under the California Consumer Privacy Act and California Privacy Rights Act, including the right to know what personal information is collected and how it is used, the right to delete, the right to correct inaccurate personal information, and the right not to be discriminated against for exercising these rights. HetuSafe does not sell or share personal information as those terms are defined under California law.</p>
+            <p>To exercise any of the above rights, use the account deletion flow in your Profile page, or contact us at <strong>arishwanthreddy@gmail.com</strong>. We will respond within 30 days.</p>
             <Callout>Account deletion is self-service. Go to Profile → Delete Account → verify with OTP. Your data is purged immediately.</Callout>
           </Section>
 
@@ -167,7 +159,7 @@ export default function Privacy() {
           </Section>
 
           <Section id="children" title="Children">
-            <p>Hetusafe is not directed at children under 13 years of age. We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please contact us and we will delete it promptly.</p>
+            <p>HetuSafe is not directed at children under 13 years of age. We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please contact us and we will delete it promptly.</p>
           </Section>
 
           <Section id="changes" title="Policy Changes">
@@ -178,10 +170,10 @@ export default function Privacy() {
           <Section id="contact" title="Contact Us">
             <p>For privacy-related questions, data requests, or to report a concern:</p>
             <ul>
-              <li><strong>Email:</strong> arishwanthreddy@gmail.com <em style={{ color: '#64748b', fontSize: '13px' }}>(Temporary contact — dedicated support email coming soon with our domain launch)</em></li>
-              <li><strong>Response time:</strong> Within 5 business days for general enquiries, within 30 days for GDPR requests</li>
+              <li><strong>Email:</strong> arishwanthreddy@gmail.com</li>
+              <li><strong>Response time:</strong> Within 5 business days for general enquiries, within 30 days for GDPR/CCPA requests</li>
             </ul>
-            <p>Hetusafe is operated independently. We are not affiliated with any government agency.</p>
+            <p>HetuSafe is operated independently. We are not affiliated with any government agency.</p>
           </Section>
 
           <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
@@ -222,4 +214,3 @@ function Callout({ children }) {
     </div>
   )
 }
-

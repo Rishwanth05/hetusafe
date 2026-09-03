@@ -1,126 +1,149 @@
-# Hetusafe — Safety Alert & Visibility Engine
+# HetuSafe
 
-A community-powered PWA where residents report, confirm, and track local hazards in real time.
+A real-time civic safety platform and Progressive Web App where residents report, verify, and track physical neighborhood hazards.
 
-> Two-factor auth, WebSocket broadcasting, proximity-based FCM push notifications, a trust-score system, and an admin audit surface — built as a portfolio project with production-grade security and a CI pipeline that runs against real infrastructure.
-
----
-
-![CI](https://github.com/Rishwanth05/project_save/actions/workflows/ci.yml/badge.svg)
+[![CI Pipeline](https://github.com/Rishwanth05/hetusafe/actions/workflows/ci.yml/badge.svg)](https://github.com/Rishwanth05/hetusafe/actions)
+[![Node.js](https://img.shields.io/badge/Node.js-20_LTS-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[Live Application](https://hetusafe.com) • [Architecture](#architecture) • [Engineering Highlights](#engineering-highlights) • [Running Locally](#running-locally) • [API Specification](docs/API.md)
 
 ---
 
 ## Overview
 
-Urban residents often lack a fast, reliable channel to flag local safety hazards — road damage, flooding, downed power lines — and verify whether they've been addressed. Hetusafe provides a map-centric interface where users submit geo-tagged reports that appear live for anyone in the area.
+Local hazards such as flooding, damaged roads, or downed infrastructure can affect nearby residents before information reaches them through traditional reporting channels. HetuSafe makes community reports immediately visible to people in the affected area.
 
-The backend is a Node.js/Express API backed by PostgreSQL and Redis. Reports are broadcast over Socket.io to all connected clients, so active map sessions reflect new submissions without polling. Push notifications reach users within a 30-mile radius via Firebase Cloud Messaging, including when the app is not open. A trust-score system records each user's contribution history; the score increases by 10 points on submission and by 25 when a report is resolved by another community member, driving badge tier progression from Newcomer to Hero.
+The platform persists reports to PostgreSQL and broadcasts them to connected clients over Socket.io, so active map sessions reflect new submissions without polling. Push notifications reach residents within a 30-mile radius via Firebase Cloud Messaging, including when the application is not open. A trust-score system tracks contribution history, awarding 10 points per report submitted and 25 points when a report is resolved by another community member.
 
-The design treats security and observability as first-class concerns rather than afterthoughts. Every state-changing route requires both a verified JWT and a double-submit CSRF token. Uploaded images are validated against their file signatures, re-encoded to strip metadata, and stored on S3. All admin actions are written to an immutable audit log. The 91-test suite runs against real PostgreSQL and Redis instances in CI — not in-memory substitutes — so integration failures surface before they reach production.
+The core service prioritizes strict data integrity and real-world edge defense:
+* **Secure Media Processing:** File signatures are inspected at the byte level before images undergo automated metadata stripping and WebP transcoding.
+* **Proximity Event Routing:** Database-level spatial distance evaluations drive targeted push fanouts without polling.
+* **Infrastructure-backed Integration Testing:** A 91-case test suite executes against live PostgreSQL and Redis service containers inside GitHub Actions — preventing in-memory mocking artifacts from reaching production.
 
 ---
 
 ## Architecture
 
-```
-Browser / PWA
-     │
-     ├── HTTP/REST ──▶  Express (Node.js 20)  ──▶  PostgreSQL 15
-     │                        │               ──▶  Redis 7
-     └── WebSocket ──▶  Socket.io             ──▶  AWS S3 (images)
-                              │
-                              └── Firebase Admin SDK ──▶ FCM ──▶ Device
+```text
+               +-------------------------------------------------------------+
+               |                  Client Surface (React 19 PWA)             |
+               |         MapLibre GL  •  Workbox SW  •  Firebase Client       |
+               +------------------------------+------------------------------+
+                                              |
+                     HTTPS (REST API)         |          WebSocket (WSS)
+               Stateful & Auth Operations     |      Live Incident Broadcasts
+                                              v
+               +-------------------------------------------------------------+
+               |                 API Service (Node.js / Express 5)           |
+               |   [Zod Payload Parser]  [Dual-Submit CSRF]  [Rate Limiter]  |
+               +--------------+------------------------------+---------------+
+                              |                              |
+                Persistent    |                              |  Cache / Ephemeral State
+                   Data       v                              v
+               +-----------------------------+ +-----------------------------+
+               |       PostgreSQL 15         | |       Redis 7               |
+               | - Incidents & Audit Trail   | | - Access Token Blacklist    |
+               | - Haversine Geospatial Calc | | - 30s GeoJSON Query Cache   |
+               | - Soft-Delete Archive Log   | | - Daily Quotas & Auth Limit |
+               +-----------------------------+ +-----------------------------+
+                              |                              |
+                              | S3 Upload (Clean WebP)       | Event Fanout
+                              v                              v
+               +-----------------------------+ +-----------------------------+
+               |      AWS S3 Object Store    | |  Firebase Cloud Messaging   |
+               |  Stripped EXIF Proof Photos | |  Background Proximity Push  |
+               +-----------------------------+ +-----------------------------+
 ```
 
 ---
 
 ## Engineering Highlights
 
-### Real-Time Report Propagation
+### Real-time Updates
 
-New hazard reports are persisted in PostgreSQL and immediately broadcast to all connected clients via Socket.io's `io.emit`. Active map sessions update without polling. The Redis cache for the report list endpoint (30-second TTL) is invalidated on every write, so the next REST fetch also reflects the change.
+When a new incident is persisted, it immediately broadcasts to active map sessions via Socket.io (`io.emit`), rendering without polling latency. To balance live map traffic against database load, read queries hitting `/reports/all` use a 30-second Redis TTL. Every write transaction proactively clears this key, ensuring the next cold fetch returns synchronized state while insulating the connection pool from traffic spikes.
 
-### Proximity Push Notifications
+### Spatial Distance Calculations & Targeted Alerts
 
-When a report is created, the server queries users whose last known coordinates fall within a 30-mile radius using the Haversine formula evaluated directly in PostgreSQL. FCM tokens for qualifying users are collected in a single query and delivered via Firebase Admin SDK. The service worker handles `onBackgroundMessage` for delivery when the app is not open; the `notificationclick` handler navigates to `/results?focus=<reportId>`, routing the user to the relevant report on the map. Resolution notifications follow a separate path: only the original report owner receives them, identified by `user_id` on the notification row.
+Push notifications use localized proximity rather than broad channel blasts. On report creation, PostgreSQL evaluates the Haversine distance between the report coordinates and stored user locations to select users within a 30-mile radius. Eligible FCM device tokens are queried in a single database pass and dispatched through the Firebase Admin SDK. The service worker handles background FCM messages when the application is not actively open in the foreground, and tapping the notification deep-links to the focused map coordinate (`/results?focus=<reportId>`). Community resolution alerts remain point-to-point, targeting only the original report owner.
 
-### Authentication
+### Secure Media Processing
 
-Login is a two-step process: password validation followed by a 6-digit OTP sent via SendGrid. Access tokens carry a 15-minute expiry; refresh tokens are stored in PostgreSQL and rotated on every use with a 7-day rolling window. On logout, the access token is written to a Redis blacklist with a 900-second TTL, matching the token's remaining lifetime exactly. Five consecutive failed login attempts lock the account for 30 minutes and trigger an email notification. All state-changing routes require a double-submit CSRF token in addition to a valid JWT.
+Uploads pass through three validation and normalization stages before reaching S3:
 
-### Secure Image Pipeline
+1. **Magic-Byte Inspection:** The request's incoming `Content-Type` header is discarded. The payload buffer is verified directly against an allowlist via `file-type`.
+2. **EXIF Purging & WebP Conversion:** Media is re-encoded to WebP (quality 80) through Sharp, stripping all EXIF and GPS tags.
+3. **Buffer Normalization:** The processed image is converted to a standard Node.js `Buffer` before being passed to the AWS SDK v3 for the S3 upload.
 
-Photo uploads pass through three stages before reaching S3. The file's magic bytes are checked against an allowlist using the `file-type` library — the client-supplied `Content-Type` header is ignored. The image is then re-encoded to WebP at quality 80 via Sharp, removing all embedded EXIF and GPS metadata. Sharp's output buffer is copied from its WASM heap into a plain Node.js `Buffer` before the S3 upload, because the AWS SDK v3 rejects `SharedArrayBuffer` in the request body.
+### Session Termination via Token Blacklist
 
-### Redis Operational Role
+To retain short-lived stateless access tokens while supporting immediate logout, the application uses 15-minute JWT access tokens paired with rotating 7-day refresh tokens stored in PostgreSQL. On logout, the access token is added to a Redis blacklist with a fixed 900-second TTL — equal to its full lifetime — so it cannot be reused even if intercepted after logout. Inbound requests check this in-memory blacklist, allowing session termination without a database roundtrip on every request.
 
-Redis serves five distinct responsibilities: a global rate limit (100 requests per minute), a stricter auth-route limit (20 requests per 15 minutes), a 30-second response cache for the active reports list, a per-user daily submission counter (capped at 5, keyed by date), and an access-token blacklist for immediate revocation on logout. Each concern uses a separate key namespace with an appropriate TTL.
+### Atomic Self-Deletion & Moderation Lifecycle
 
-### Testing Approach
+Report owners can delete their submission within a 6-hour window. To prevent orphaned state or point farming, the deletion executes as an atomic database transaction:
 
-The 91 integration tests run against real PostgreSQL 15 and Redis 7 instances provisioned as GitHub Actions service containers. No database or cache layer is mocked. `auth.test.js` (28 tests) covers the full authentication flow including token rotation and blacklisting. `reports.test.js` (24 tests) covers creation with and without images, magic-byte rejection, trust-score deltas, and resolution notification targeting. `admin.test.js` (39 tests) covers role enforcement, every admin route, status-change side effects, CSRF rejection, and rate-limit behaviour.
+* The report payload is copied into a `deleted_reports` moderation archive.
+* Associated votes and status histories are dropped.
+* The original +10 trust points awarded on creation are deducted from the user's score (floored at zero).
+* Admins retain access to the `deleted_reports` table for 24 hours for audit and dispute verification before automated deletion.
+
+### Redis Operational Responsibilities
+
+Redis isolates five distinct concerns into dedicated key namespaces with independent expiration policies:
+
+* **Global Rate Limiting:** 100 req/min per IP.
+* **Auth Protection:** 20 req/15 min per IP; 5 failed login attempts enforce a 30-minute lockout.
+* **Quota Counters:** Maximum 5 reports per user/day via dynamic date keys (`user:<id>:reports:<YYYY-MM-DD>`).
+* **Active Cache:** 30-second TTL for map incidents.
+* **Token Blacklist:** Fixed 900-second TTL, equal to the access token's full lifetime.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, Vite 7, Tailwind CSS |
-| Mapping | MapLibre GL JS 5 |
-| Charts | Recharts |
-| Real-time | Socket.io (client + server) |
-| Push | Firebase SDK 12 / Firebase Admin (FCM) |
-| Backend | Node.js 20, Express 5 |
-| Database | PostgreSQL 15 |
-| Cache / Queue | Redis 7 (ioredis) |
-| Auth | JWT, bcryptjs, csrf-csrf |
-| Validation | Zod |
-| Image processing | Sharp (WebP re-encode, EXIF strip), file-type (magic bytes) |
-| File storage | AWS S3 (SDK v3) |
-| Email | SendGrid |
-| Monitoring | Sentry, PostHog |
-| Containerisation | Docker / Docker Compose |
-| CI/CD | GitHub Actions → Render deploy hook |
-
----
-
-## Testing & CI/CD
-
-91 integration tests across three suites run against real PostgreSQL 15 and Redis 7 service containers on every push and pull request to `master` — no in-memory substitutes for the database or cache layer. The Vite production build runs only after all tests pass. On success, `deploy.yml` triggers the Render deploy hook.
-
-| Suite | Tests | Scope |
-|---|---|---|
-| `auth.test.js` | 28 | Signup, OTP, login, token rotation, logout/blacklist, password reset |
-| `reports.test.js` | 24 | Creation, magic-byte rejection, trust-score delta, resolution notification targeting, voting |
-| `admin.test.js` | 39 | Role enforcement, every admin route, status-change side effects, CSRF rejection, rate-limit behaviour |
+| Layer | Technologies |
+| --- | --- |
+| **Client / PWA** | React 19, Vite 7, Tailwind CSS, MapLibre GL JS 5, Recharts, Workbox |
+| **Runtime & API** | Node.js 20 LTS, Express 5, Socket.io |
+| **Data Persistence** | PostgreSQL 15, Redis 7 (`ioredis`) |
+| **Object Storage & Delivery** | AWS S3 (SDK v3), Firebase Admin SDK (FCM HTTP v1) |
+| **Security & Auth** | Zod, `file-type`, Sharp, `csrf-csrf`, `bcryptjs`, SendGrid |
+| **Observability** | Sentry (error monitoring, performance tracing), PostHog (telemetry) |
+| **Testing & CI** | Jest, Supertest, Docker Compose, GitHub Actions |
 
 ---
 
 ## Running Locally
 
-**Prerequisites:** Node.js 20+, Docker
+### Prerequisites
+
+* Node.js `>= 20.0.0`
+* Docker Engine `>= 24.0.0` and Docker Compose
+
+### 1. Boot Services
 
 ```bash
-# 1. Start Postgres 15 + Redis 7
 docker compose up -d
-
-# 2. Backend
-cd backend
-cp .env.example .env   # fill in required values
-npm install
-npm run dev            # nodemon on :5000
-
-# 3. Frontend (separate terminal)
-cd frontend-react
-cp .env.example .env   # fill in required values
-npm install
-npm run dev            # Vite on :5173
 ```
 
-See [`backend/.env.example`](backend/.env.example) and [`frontend-react/.env.example`](frontend-react/.env.example) for all required configuration keys.
+Starts local PostgreSQL (`5432`) and Redis (`6379`) instances.
 
-After the first `docker compose up`, run the database migrations:
+### 2. Configure Environment
+
+Initialize configuration files from the templates:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend-react/.env.example frontend-react/.env
+```
+
+> **Security Note:** Do not commit `.env` files. In production, configure secrets through container environment variables or your cloud secret provider.
+
+### 3. Run Database Migrations
+
+Apply schemas and sequential migration scripts:
 
 ```bash
 PGPASSWORD=<pass> psql -h localhost -U save_user -d hetusafe \
@@ -128,33 +151,70 @@ PGPASSWORD=<pass> psql -h localhost -U save_user -d hetusafe \
 # Then apply migration files in backend/migrations/ in filename order
 ```
 
----
+### 4. Start Development Services
 
-## Documentation
+Terminal 1 (API Server):
 
-Full API reference — all routes, auth requirements, and parameter notes: [`docs/API.md`](docs/API.md).
-
-**Repository layout:**
-
-```
-backend/           Node.js/Express API, migrations, tests
-frontend-react/    React PWA
-docs/              API reference
-.github/           CI and deploy workflows
-docker-compose.yml
+```bash
+cd backend
+npm install
+npm run dev
 ```
 
+Terminal 2 (Frontend Client):
+
+```bash
+cd frontend-react
+npm install
+npm run dev
+```
+
+The interface will be live at `http://localhost:5173`.
+
 ---
 
-## Roadmap
+## Automated Testing & CI
 
-- **Horizontal scaling:** the Socket.io layer uses a single server process; a Redis pub/sub adapter would allow multiple backend instances to share the event bus without sticky sessions.
-- **Load testing:** establish throughput baselines before adding read replicas or connection pool tuning.
-- **Offline report queuing:** use the service worker's Background Sync API to queue reports submitted without connectivity and flush them on reconnect.
+91 integration tests run against live PostgreSQL 15 and Redis 7 service containers on every push and pull request to `master` — so database and Redis integration behavior is exercised in CI.
+
+```bash
+cd backend
+
+# Run the complete test suite
+npm test
+
+# Generate coverage breakdown
+npm run test:coverage
+```
+
+### Test Scope
+
+* **`auth.test.js` (28 tests):** Dual-step OTP verification, refresh token rotation, lockout escalations, and Redis revocation checks.
+* **`reports.test.js` (24 tests):** Magic-byte verification, spatial deduplication checks, trust delta calculation, and atomic 6-hour deletion mechanics.
+* **`admin.test.js` (39 tests):** Role-based access gates, double-submit CSRF enforcement, rate-limit thresholds, and audit logging.
+
+---
+
+## Deployment Pipeline
+
+* **Continuous Integration:** Every commit to `master` triggers the 91-test integration suite inside isolated container runners.
+* **Build Gate:** Passing test steps trigger the production bundle compilation (`vite build`).
+* **Continuous Delivery:** After a successful build, the deployment workflow triggers the Render deploy hook for the backend service.
+
+---
+
+## Systems Roadmap
+
+* [ ] **Multi-instance real-time delivery:** Add `@socket.io/redis-adapter` so Socket.io events can propagate across multiple backend instances.
+* [ ] **Spatial indexing:** Replace the current Haversine calculation with PostGIS `ST_DWithin` and a GiST spatial index as location data grows.
+* [ ] **Service Worker Background Sync:** Implement Background Sync API primitives to queue offline incident reports and automatically flush them when network connectivity is restored.
 
 ---
 
 ## Author
 
 **Rishwanth Reddy Adamala**
-MS Computer Science — University of Central Missouri
+
+[GitHub](https://github.com/Rishwanth05) • [LinkedIn](https://www.linkedin.com/in/rishwanth-reddy/) • [Email](mailto:rishwanthreddy05@gmail.com)
+
+All rights reserved. Contact the author for reuse permissions.
