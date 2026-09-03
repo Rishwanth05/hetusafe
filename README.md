@@ -1,58 +1,64 @@
 # Hetusafe — Safety Alert & Visibility Engine
 
-![CI](https://github.com/Rishwanth05/project_save/actions/workflows/ci.yml/badge.svg)
+A community-powered PWA where residents report, confirm, and track local hazards in real time.
 
-A community-powered **public-safety PWA** where residents report, confirm, and track local hazards in real time. Reports appear live on a map, push notifications alert nearby users within 30 miles, and a trust-score system rewards consistent contributors.
+> Two-factor auth, WebSocket broadcasting, proximity-based FCM push notifications, a trust-score system, and an admin audit surface — built as a portfolio project with production-grade security and a CI pipeline that runs against real infrastructure.
 
 ---
 
-## Features
+![CI](https://github.com/Rishwanth05/project_save/actions/workflows/ci.yml/badge.svg)
+
+---
+
+## Overview
+
+Urban residents often lack a fast, reliable channel to flag local safety hazards — road damage, flooding, downed power lines — and verify whether they've been addressed. Hetusafe provides a map-centric interface where users submit geo-tagged reports that appear live for anyone in the area.
+
+The backend is a Node.js/Express API backed by PostgreSQL and Redis. Reports are broadcast over Socket.io to all connected clients, so active map sessions reflect new submissions without polling. Push notifications reach users within a 30-mile radius via Firebase Cloud Messaging, including when the app is not open. A trust-score system records each user's contribution history; the score increases by 10 points on submission and by 25 when a report is resolved by another community member, driving badge tier progression from Newcomer to Hero.
+
+The design treats security and observability as first-class concerns rather than afterthoughts. Every state-changing route requires both a verified JWT and a double-submit CSRF token. Uploaded images are validated against their file signatures, re-encoded to strip metadata, and stored on S3. All admin actions are written to an immutable audit log. The 91-test suite runs against real PostgreSQL and Redis instances in CI — not in-memory substitutes — so integration failures surface before they reach production.
+
+---
+
+## Architecture
+
+```
+Browser / PWA
+     │
+     ├── HTTP/REST ──▶  Express (Node.js 20)  ──▶  PostgreSQL 15
+     │                        │               ──▶  Redis 7
+     └── WebSocket ──▶  Socket.io             ──▶  AWS S3 (images)
+                              │
+                              └── Firebase Admin SDK ──▶ FCM ──▶ Device
+```
+
+---
+
+## Engineering Highlights
+
+### Real-Time Report Propagation
+
+New hazard reports are persisted in PostgreSQL and immediately broadcast to all connected clients via Socket.io's `io.emit`. Active map sessions update without polling. The Redis cache for the report list endpoint (30-second TTL) is invalidated on every write, so the next REST fetch also reflects the change.
+
+### Proximity Push Notifications
+
+When a report is created, the server queries users whose last known coordinates fall within a 30-mile radius using the Haversine formula evaluated directly in PostgreSQL. FCM tokens for qualifying users are collected in a single query and delivered via Firebase Admin SDK. The service worker handles `onBackgroundMessage` for delivery when the app is not open; the `notificationclick` handler navigates to `/results?focus=<reportId>`, routing the user to the relevant report on the map. Resolution notifications follow a separate path: only the original report owner receives them, identified by `user_id` on the notification row.
 
 ### Authentication
-- Two-step OTP login: password check → 6-digit email code via SendGrid
-- Account lockout after 5 failed attempts (30-minute lock, email notification)
-- JWT access tokens (15 min) + rotating refresh tokens (7 days)
-- Access-token blacklist in Redis on logout
-- CSRF protection on all state-changing routes (double-submit cookie)
-- Forgot/reset password with single-use time-limited tokens
-- Emergency contact management per user profile
 
-### Hazard Reporting
-- Submit reports with hazard category, severity, description, and GPS coordinates
-- Photo upload: magic-byte validated (not just Content-Type), re-encoded to **WebP via Sharp** (strips all EXIF/GPS metadata), stored on **AWS S3**
-- Daily limit: 5 reports per user per day (enforced via Redis)
-- Duplicate detection: flags reports within 50 m of an existing open report in the last 24 hours
-- Community resolution: any user can mark a report resolved with photographic proof
-- Resolution voting: confirmed / disputed votes per report
-- Live broadcast to all connected clients via **Socket.io** on every new report
+Login is a two-step process: password validation followed by a 6-digit OTP sent via SendGrid. Access tokens carry a 15-minute expiry; refresh tokens are stored in PostgreSQL and rotated on every use with a 7-day rolling window. On logout, the access token is written to a Redis blacklist with a 900-second TTL, matching the token's remaining lifetime exactly. Five consecutive failed login attempts lock the account for 30 minutes and trigger an email notification. All state-changing routes require a double-submit CSRF token in addition to a valid JWT.
 
-### Trust Score & Gamification
-- Score range 0–1,000: +10 per report submitted, +25 when your report is resolved
-- Badge tiers: **Newcomer → Reporter → Trusted → Guardian → Hero**
-- Achievement badges: First Report, 10 Reports, Resolver, Community Hero
-- Public leaderboard (top 20 contributors by score)
+### Secure Image Pipeline
 
-### Notifications
-- **Firebase Cloud Messaging (FCM)**: push notifications to nearby users within 30 miles (Haversine formula)
-- In-app notification feed: per-user targeted messages + global broadcasts
-- Real-time unread badge count; mark-all-read and soft-delete supported
+Photo uploads pass through three stages before reaching S3. The file's magic bytes are checked against an allowlist using the `file-type` library — the client-supplied `Content-Type` header is ignored. The image is then re-encoded to WebP at quality 80 via Sharp, removing all embedded EXIF and GPS metadata. Sharp's output buffer is copied from its WASM heap into a plain Node.js `Buffer` before the S3 upload, because the AWS SDK v3 rejects `SharedArrayBuffer` in the request body.
 
-### Admin Dashboard
-- Live stats: total users, reports, resolved count, critical incidents
-- User management: search/page, role changes, account deletion (with cascade null on reports)
-- Report management: status workflow (active → under review → resolved etc.), bulk filter, delete
-- 30-day analytics charts (Recharts): reports by day, category, severity; average resolution time
-- Broadcast alerts to all users (inserted as notifications + Socket.io emit)
-- Immutable audit log for all admin actions
+### Redis Operational Role
 
-### Infrastructure
-- **PostgreSQL 15** (Render managed in production; Docker service locally)
-- **Redis 7** for sessions, rate limiting, daily report counters, token blacklist
-- Global rate limit: 100 req/min; auth routes: 20 req/15 min (both Redis-backed)
-- Background jobs via `node-cron`: nightly DB backup, 30-day notification cleanup
-- **GitHub Actions CI**: tests + build gate on every push/PR to master
-- PWA: Workbox service worker, installable, offline-capable map tiles cached
-- Monitoring: Sentry (backend + frontend), PostHog analytics
+Redis serves five distinct responsibilities: a global rate limit (100 requests per minute), a stricter auth-route limit (20 requests per 15 minutes), a 30-second response cache for the active reports list, a per-user daily submission counter (capped at 5, keyed by date), and an access-token blacklist for immediate revocation on logout. Each concern uses a separate key namespace with an appropriate TTL.
+
+### Testing Approach
+
+The 91 integration tests run against real PostgreSQL 15 and Redis 7 instances provisioned as GitHub Actions service containers. No database or cache layer is mocked. `auth.test.js` (28 tests) covers the full authentication flow including token rotation and blacklisting. `reports.test.js` (24 tests) covers creation with and without images, magic-byte rejection, trust-score deltas, and resolution notification targeting. `admin.test.js` (39 tests) covers role enforcement, every admin route, status-change side effects, CSRF rejection, and rate-limit behaviour.
 
 ---
 
@@ -79,281 +85,72 @@ A community-powered **public-safety PWA** where residents report, confirm, and t
 
 ---
 
-## Project Structure
+## Testing & CI/CD
 
-```
-project-save/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml          # test + build jobs on push/PR to master
-│       └── deploy.yml      # Render deploy hook on push to master
-├── backend/
-│   ├── migrations/         # ordered SQL migration files
-│   ├── scripts/            # nightly DB backup shell script
-│   ├── src/
-│   │   ├── config/         # redis.js, firebase.js
-│   │   ├── jobs/           # node-cron background tasks
-│   │   ├── middleware/      # auth.js (verifyToken, requireAdmin)
-│   │   ├── routes/         # one file per API domain (see API reference)
-│   │   ├── tests/          # Jest integration test suite (70 tests)
-│   │   │   └── __mocks__/  # Firebase, S3, file-type stubs
-│   │   ├── utils/          # email.js (SendGrid helpers)
-│   │   ├── app.js          # Express app (middleware, route mounts)
-│   │   ├── db.js           # pg Pool singleton
-│   │   └── server.js       # HTTP + Socket.io server, cron start
-│   ├── .env.test           # test environment (safe defaults, no real secrets)
-│   ├── jest.config.js
-│   └── package.json
-├── frontend-react/
-│   ├── public/             # manifest.json, PWA icons
-│   ├── src/                # React components, pages, hooks
-│   ├── vite.config.js      # Vite + PWA plugin config
-│   └── package.json
-└── docker-compose.yml      # Postgres 15 + Redis 7 for local dev
-```
+91 integration tests across three suites run against real PostgreSQL 15 and Redis 7 service containers on every push and pull request to `master` — no in-memory substitutes for the database or cache layer. The Vite production build runs only after all tests pass. On success, `deploy.yml` triggers the Render deploy hook.
+
+| Suite | Tests | Scope |
+|---|---|---|
+| `auth.test.js` | 28 | Signup, OTP, login, token rotation, logout/blacklist, password reset |
+| `reports.test.js` | 24 | Creation, magic-byte rejection, trust-score delta, resolution notification targeting, voting |
+| `admin.test.js` | 39 | Role enforcement, every admin route, status-change side effects, CSRF rejection, rate-limit behaviour |
 
 ---
 
-## Local Development Setup
+## Running Locally
 
-### Prerequisites
-
-- Node.js 20+
-- Docker + Docker Compose
-
-### 1. Start Postgres and Redis
+**Prerequisites:** Node.js 20+, Docker
 
 ```bash
+# 1. Start Postgres 15 + Redis 7
 docker compose up -d
-```
 
-This starts `save_postgres` (port 5432) and `save_redis` (port 6379) using the credentials in `docker-compose.yml`.
-
-### 2. Load the database schema
-
-```bash
-# Run from the repo root
-PGPASSWORD=<your-db-pass> psql -h localhost -U save_user -d hetusafe \
-  -f backend/migrations/schema.sql
-
-# Then run each migration in order:
-for f in backend/migrations/sprint_week1_security.sql \
-          backend/migrations/week4_audit_log.sql \
-          backend/migrations/week4_deletion_comments.sql \
-          backend/migrations/week5_fcm_tokens.sql \
-          backend/migrations/week5_master_data.sql \
-          backend/migrations/week5_notifications_soft_delete.sql \
-          backend/migrations/week5_refresh_tokens.sql \
-          backend/migrations/week5_user_location.sql \
-          backend/migrations/week6_notifications_per_user.sql \
-          backend/migrations/resolution_votes.sql; do
-  PGPASSWORD=<your-db-pass> psql -h localhost -U save_user -d hetusafe -f "$f"
-done
-```
-
-### 3. Configure environment variables
-
-Create `backend/.env` (never commit this file):
-
-```env
-# Server
-PORT=5000
-
-# Database — local Docker
-DB_DEV_URL=postgresql://save_user:<password>@localhost:5432/hetusafe
-
-# Database — Render production (leave blank for local dev)
-DB_PROD_URL=
-
-# JWT & CSRF
-JWT_SECRET=<random 32+ char string>
-CSRF_SECRET=<random 32+ char string>
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Frontend origin (for CORS)
-FRONTEND_URL=http://localhost:5173
-
-# SendGrid
-SENDGRID_API_KEY=SG.<your_key>
-SENDGRID_FROM=noreply@yourdomain.com
-SENDGRID_TO=you@yourdomain.com
-
-# Firebase Admin SDK (JSON service account — single-line)
-GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
-
-# AWS S3
-S3_BUCKET_NAME=your-bucket
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-```
-
-Create `frontend-react/.env`:
-
-```env
-VITE_API_URL=http://localhost:5000
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-VITE_FIREBASE_VAPID_KEY=...
-VITE_SENTRY_DSN=           # optional
-VITE_POSTHOG_KEY=          # optional
-VITE_POSTHOG_HOST=         # optional
-```
-
-### 4. Run the backend
-
-```bash
+# 2. Backend
 cd backend
+cp .env.example .env   # fill in required values
 npm install
-npm run dev       # nodemon, restarts on change
-```
+npm run dev            # nodemon on :5000
 
-### 5. Run the frontend
-
-```bash
+# 3. Frontend (separate terminal)
 cd frontend-react
+cp .env.example .env   # fill in required values
 npm install
-npm run dev       # Vite dev server at http://localhost:5173
+npm run dev            # Vite on :5173
 ```
 
----
+See [`backend/.env.example`](backend/.env.example) and [`frontend-react/.env.example`](frontend-react/.env.example) for all required configuration keys.
 
-## API Reference
-
-All routes are prefixed with `/api/v1/` unless noted. State-changing routes require a valid `X-CSRF-Token` header (obtain from `GET /api/csrf-token`). Protected routes require `Authorization: Bearer <token>`.
-
-### Auth `/api/v1/auth`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/signup` | — | Register; sends verification OTP |
-| POST | `/verify-email` | — | Confirm email OTP; returns tokens |
-| POST | `/login` | — | Step 1: validate password; sends login OTP |
-| POST | `/verify-login` | — | Step 2: confirm login OTP; returns tokens |
-| POST | `/logout` | ✓ | Blacklist access token, revoke refresh token |
-| POST | `/refresh` | — | Rotate refresh token; returns new pair |
-| GET | `/me` | ✓ | Current user profile |
-| GET | `/my-reports` | ✓ | Reports submitted by the current user |
-| PUT | `/update-name` | ✓ | Update display name |
-| PUT | `/change-password` | ✓ | Change password (requires current password) |
-| POST | `/resend-otp` | — | Re-send OTP (verify or login purpose) |
-| POST | `/fcm-token` | ✓ | Register Firebase push token |
-| POST | `/forgot-password` | — | Send password-reset link |
-| POST | `/reset-password` | — | Consume reset token, set new password |
-| POST | `/request-delete` | ✓ | Send account-deletion OTP |
-| DELETE | `/delete-account` | ✓ | Confirm deletion OTP; permanently deletes account |
-| GET | `/emergency-contacts` | ✓ | Fetch emergency contacts |
-| PUT | `/emergency-contacts` | ✓ | Save emergency contacts (max 10) |
-
-### Reports `/api/v1/reports`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/all` | ✓ | All active reports (cached 30 s in Redis) |
-| POST | `/create` | ✓ | Submit a report; optional image upload to S3 |
-| POST | `/resolve` | — | Mark resolved with proof photo |
-| POST | `/check-duplicate` | — | 50 m / 24 hr duplicate check |
-| GET | `/trust/:userId` | — | Trust score and badge tier for a user |
-| GET | `/:id/votes` | ✓ | Vote counts + current user's vote |
-| POST | `/:id/vote` | ✓ | Cast or change vote (confirmed / disputed) |
-
-### Admin `/api/v1/admin` *(requires admin role)*
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/stats` | Dashboard counts + recent reports + 7-day chart |
-| GET | `/users` | Paginated user list with search |
-| DELETE | `/users/:id` | Delete user (nullifies their reports) |
-| PUT | `/users/:id/role` | Change user role (user / admin) |
-| GET | `/reports` | Paginated report list with status/severity filter |
-| PUT | `/reports/:id/status` | Update report status; logs to audit trail |
-| DELETE | `/reports/:id` | Delete report |
-| GET | `/analytics` | 30-day charts: by day, category, severity, resolution time |
-| POST | `/broadcast` | Create notification visible to all users |
-| GET | `/audit-log` | Paginated admin action log |
-
-### Badges & Leaderboard `/api/v1/badges`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/me` | ✓ | Current user's earned badges and stats |
-| GET | `/leaderboard` | — | Top 20 contributors by score |
-
-### Notifications `/api/v1/notifications`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/` | ✓ | Latest 30 notifications for this user |
-| GET | `/unread-count` | ✓ | Count of unread notifications since last read |
-| PUT | `/read-all` | ✓ | Mark all notifications as read |
-| DELETE | `/clear-all` | ✓ | Soft-delete all visible notifications |
-| DELETE | `/:id` | ✓ | Soft-delete a single notification |
-
-### Master Data `/api/v1/master`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/categories` | — | Active hazard categories |
-| GET | `/severities` | — | Active severity levels |
-| GET | `/statuses` | — | Active report statuses |
-| POST | `/categories` | admin | Create hazard category |
-| PATCH | `/categories/:id/toggle` | admin | Enable / disable a category |
-
-### Other
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/csrf-token` | — | Get double-submit CSRF token (also sets cookie) |
-| GET | `/api/v1/public/stats` | — | Public stats for landing page |
-| POST | `/api/v1/contact/send` | — | Send contact-form message via SendGrid |
-
----
-
-## Testing
-
-The backend has a Jest integration test suite that runs against a real PostgreSQL and Redis instance.
+After the first `docker compose up`, run the database migrations:
 
 ```bash
-cd backend
-
-# Run all 70 tests
-npm test
-
-# Run with coverage report
-npm run test:coverage
+PGPASSWORD=<pass> psql -h localhost -U save_user -d hetusafe \
+  -f backend/migrations/schema.sql
+# Then apply migration files in backend/migrations/ in filename order
 ```
-
-**What's tested:**
-- `auth.test.js` — signup, OTP verification, login flow, token refresh, logout/blacklist, forgot/reset password (28 tests)
-- `reports.test.js` — report creation (with/without image, fake magic bytes), trust score changes, resolution notification targeting, voting (14 tests)
-- `admin.test.js` — role enforcement, every admin route, status-change side-effect documentation, CSRF rejection, rate-limit behaviour (28 tests)
-
-CI runs the full suite on every push and PR targeting `master` using GitHub Actions service containers for Postgres and Redis (no Docker Compose in CI).
 
 ---
 
-## Deployment
+## Documentation
 
-**Production stack**
+Full API reference — all routes, auth requirements, and parameter notes: [`docs/API.md`](docs/API.md).
 
-| Service | Platform |
-|---------|----------|
-| Backend API | Render (Web Service) |
-| PostgreSQL | Render (Managed Postgres) |
-| Redis | Render (Managed Redis) |
-| Frontend | *(static host of your choice)* |
-| Images | AWS S3 |
+**Repository layout:**
 
-**CI/CD pipeline**
+```
+backend/           Node.js/Express API, migrations, tests
+frontend-react/    React PWA
+docs/              API reference
+.github/           CI and deploy workflows
+docker-compose.yml
+```
 
-1. Push to `master` → GitHub Actions runs `test` job (Postgres + Redis containers, 70 Jest tests).
-2. If tests pass → `build` job runs (`npm ci` + `vite build`).
-3. On success → `deploy.yml` triggers the Render deploy hook, which pulls and redeploys the backend.
+---
+
+## Roadmap
+
+- **Horizontal scaling:** the Socket.io layer uses a single server process; a Redis pub/sub adapter would allow multiple backend instances to share the event bus without sticky sessions.
+- **Load testing:** establish throughput baselines before adding read replicas or connection pool tuning.
+- **Offline report queuing:** use the service worker's Background Sync API to queue reports submitted without connectivity and flush them on reconnect.
 
 ---
 
