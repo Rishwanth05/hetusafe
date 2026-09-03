@@ -1,7 +1,15 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env.test') });
+
+// .env.test.local is gitignored and overrides individual values from .env.test
+// for local development (e.g. DB_DEV_URL with the local Postgres password).
+const localEnv = path.resolve(__dirname, '../../.env.test.local');
+if (fs.existsSync(localEnv)) {
+  require('dotenv').config({ path: localEnv, override: true });
+}
 
 module.exports = async () => {
   const { Pool } = require('pg');
