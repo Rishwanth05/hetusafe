@@ -314,27 +314,28 @@ router.post('/refresh', async (req, res, next) => {
     if (!refreshToken)
       return res.status(401).json({ message: 'Refresh token required' });
 
-    const result = await pool.query(
-      `SELECT * FROM refresh_tokens WHERE token = $1 AND expires_at > NOW()`,
+    // Atomically consume the token. Concurrent requests race to this DELETE;
+    // only one gets a row back — the second sees zero rows and gets 401.
+    const { rows: tokenRows } = await pool.query(
+      `DELETE FROM refresh_tokens WHERE token = $1 AND expires_at > NOW() RETURNING user_id`,
       [refreshToken]
     );
 
-    if (result.rows.length === 0)
+    if (tokenRows.length === 0)
       return res.status(401).json({ message: 'Invalid or expired refresh token' });
-
-    const tokenRow = result.rows[0];
 
     const userResult = await pool.query(
       `SELECT id, name, email, role FROM users WHERE id = $1`,
-      [tokenRow.user_id]
+      [tokenRows[0].user_id]
     );
     const user = userResult.rows[0];
+    if (!user)
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
 
-    // Rotate: delete old, insert new
+    // Rotate: insert new token pair
     const newRefreshToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
     await pool.query(
       `INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
       [user.id, newRefreshToken, expiresAt]
@@ -374,6 +375,10 @@ router.post('/logout', verifyToken, async (req, res, next) => {
 router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), async (req, res, next) => {
   try {
     const { email, purpose } = req.body;
+
+    const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (rows.length === 0)
+      return res.json({ message: 'OTP resent ✅' });
 
     const otp = generateOTP();
     const expires_at = new Date(Date.now() + 10 * 60 * 1000);
@@ -464,6 +469,7 @@ router.put('/change-password', verifyToken, validate(changePasswordSchema), asyn
 
     const password_hash = await bcrypt.hash(new_password, 12);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, req.user.id]);
+    await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [req.user.id]);
     res.json({ message: 'Password changed ✅' });
   } catch (err) {
     next(err);
@@ -536,19 +542,32 @@ router.delete('/delete-account', verifyToken, async (req, res, next) => {
       });
     }
 
-    await pool.query(`UPDATE reports SET user_id = NULL WHERE user_id = $1`, [req.user.id]);
+    let dbClient
+    try {
+      dbClient = await pool.connect()
+      await dbClient.query('BEGIN')
 
-    if (reason) {
-      await pool.query(
-        `INSERT INTO account_deletions (email, reason, comments, deleted_at) VALUES ($1, $2, $3, NOW())`,
-        [email, reason, comments || null]
-      );
+      await dbClient.query(`UPDATE reports SET user_id = NULL WHERE user_id = $1`, [req.user.id])
+
+      if (reason) {
+        await dbClient.query(
+          `INSERT INTO account_deletions (email, reason, comments, deleted_at) VALUES ($1, $2, $3, NOW())`,
+          [email, reason, comments || null]
+        )
+      }
+
+      await dbClient.query(`DELETE FROM otp_codes WHERE email = $1`, [email])
+      await dbClient.query(`DELETE FROM users WHERE id = $1`, [req.user.id])
+
+      await dbClient.query('COMMIT')
+    } catch (txErr) {
+      if (dbClient) await dbClient.query('ROLLBACK').catch(() => {})
+      throw txErr
+    } finally {
+      if (dbClient) dbClient.release()
     }
 
-    await pool.query(`DELETE FROM otp_codes WHERE email = $1`, [email]);
-    await pool.query(`DELETE FROM users WHERE id = $1`, [req.user.id]);
-
-    res.json({ message: 'Account permanently deleted.' });
+    res.json({ message: 'Account permanently deleted.' })
   } catch (err) {
     next(err);
   }
@@ -623,6 +642,7 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res, n
     await pool.query('INSERT INTO password_history (user_id, password_hash) VALUES ($1, $2)', [userId, password_hash]);
     await pool.query('UPDATE password_reset_tokens SET used = true WHERE token = $1', [token]);
     await pool.query('DELETE FROM otp_codes WHERE email = $1', [record.email]);
+    await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
 
     res.json({ message: 'Password reset successful. Please log in.' });
   } catch (err) {

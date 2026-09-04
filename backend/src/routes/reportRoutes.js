@@ -393,6 +393,16 @@ router.post("/resolve", verifyToken, (req, res, next) => {
     if (!req.file)
       return res.status(400).json({ message: "Camera proof image is required to resolve a report" });
 
+    const { rows: reportRows } = await pool.query(
+      'SELECT id, user_id, status, hazard_type FROM reports WHERE id = $1',
+      [report_id]
+    );
+    const report = reportRows[0];
+    if (!report)
+      return res.status(404).json({ message: 'Report not found' });
+    if (report.status !== 'active')
+      return res.status(409).json({ message: 'Report is already resolved or archived' });
+
     let proof_url
     try {
       proof_url = await processAndUploadImage(req.file.buffer)
@@ -414,18 +424,14 @@ router.post("/resolve", verifyToken, (req, res, next) => {
     try { await redis.del('reports:all'); } catch {}
 
     // TRUST-1 — +25 points for resolving a report
-    const reportOwner = await pool.query(
-      'SELECT user_id, hazard_type FROM reports WHERE id = $1',
-      [report_id]
-    )
-    if (reportOwner.rows[0]?.user_id) {
-      await updateTrustScore(pool, reportOwner.rows[0].user_id, 25)
+    if (report.user_id) {
+      await updateTrustScore(pool, report.user_id, 25)
     }
 
     // Notify the original reporter that their report has been resolved.
     // user_id targets only the report owner; other users do not see this notification.
-    const ownerId   = reportOwner.rows[0]?.user_id   || null
-    const hazardType = reportOwner.rows[0]?.hazard_type || 'Hazard'
+    const ownerId    = report.user_id    || null
+    const hazardType = report.hazard_type || 'Hazard'
     if (ownerId) {
       pool.query(
         `INSERT INTO notifications (title, message, severity, type, user_id, report_id, created_at)

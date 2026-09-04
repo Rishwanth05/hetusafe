@@ -514,4 +514,37 @@ describe('POST /api/v1/reports/resolve', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/proof/i);
   });
+
+  test('nonexistent report_id returns 404 and does not upload to S3', async () => {
+    const { mockSend } = require('./__mocks__/client-s3');
+    mockSend.mockClear();
+
+    const { accessToken } = await createVerifiedUser();
+    const res = await resolveReport(999999, accessToken);
+
+    expect(res.status).toBe(404);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  test('resolving the same report twice returns 409 on second call and awards trust only once', async () => {
+    const { accessToken, userId } = await createVerifiedUser();
+    const {
+      body: { report: { id: reportId } },
+    } = await postReport(accessToken);
+
+    const { rows: [{ trust_score: scoreBefore }] } = await pool.query(
+      'SELECT trust_score FROM users WHERE id = $1', [userId]
+    );
+
+    const first = await resolveReport(reportId, accessToken);
+    expect(first.status).toBe(200);
+
+    const second = await resolveReport(reportId, accessToken);
+    expect(second.status).toBe(409);
+
+    const { rows: [{ trust_score: scoreAfter }] } = await pool.query(
+      'SELECT trust_score FROM users WHERE id = $1', [userId]
+    );
+    expect(scoreAfter).toBe(scoreBefore + 25);
+  });
 });
