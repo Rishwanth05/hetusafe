@@ -427,3 +427,153 @@ describe('POST /api/v1/auth/reset-password', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ── Account Deletion ──────────────────────────────────────────────────────────
+
+describe('DELETE /api/v1/auth/delete-account', () => {
+  // Restore any spies created within these tests without touching the
+  // top-level jest.mock('../utils/email', …), which is a module mock and
+  // is unaffected by restoreAllMocks().
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('valid OTP deletes user row, anonymises reports, clears OTP codes', async () => {
+    // Use the accessToken returned directly by verify-email to avoid going
+    // through POST /auth/login, which has an in-memory rate limiter that
+    // accumulates across the full test suite and would be exhausted by this point.
+    const { body: { accessToken, user } } = await createVerifiedUser();
+    const userId = user.id;
+
+    // Insert a report owned by this user so we can assert anonymisation.
+    const { rows: [report] } = await pool.query(
+      `INSERT INTO reports
+         (user_id, hazard_type, severity, description, latitude, longitude, location_method)
+       VALUES ($1, 'Pothole', 'low', 'Test hazard', 37.0, -122.0, 'gps')
+       RETURNING id`,
+      [userId]
+    );
+    const reportId = report.id;
+
+    // Request the deletion OTP (sendOTPEmail is mocked; code lands in DB).
+    await agent
+      .post('/api/v1/auth/request-delete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    const otp = await getOtp(USER.email, 'delete');
+    expect(otp).toBeTruthy();
+
+    const res = await agent
+      .delete('/api/v1/auth/delete-account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ otp });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/permanently deleted/i);
+
+    // User row must be gone.
+    const { rows: users } = await pool.query(
+      'SELECT id FROM users WHERE id = $1', [userId]
+    );
+    expect(users).toHaveLength(0);
+
+    // Report must have user_id anonymised to NULL.
+    const { rows: reports } = await pool.query(
+      'SELECT user_id FROM reports WHERE id = $1', [reportId]
+    );
+    expect(reports).toHaveLength(1);
+    expect(reports[0].user_id).toBeNull();
+
+    // OTP codes for this email must all be cleared.
+    const { rows: otps } = await pool.query(
+      'SELECT * FROM otp_codes WHERE email = $1', [USER.email]
+    );
+    expect(otps).toHaveLength(0);
+  });
+
+  test('wrong OTP returns 400, increments attempts counter, leaves account intact', async () => {
+    const { body: { accessToken, user } } = await createVerifiedUser();
+    const userId = user.id;
+
+    await agent
+      .post('/api/v1/auth/request-delete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    const res = await agent
+      .delete('/api/v1/auth/delete-account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ otp: '000000' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/incorrect otp/i);
+
+    // User row must still exist.
+    const { rows: users } = await pool.query(
+      'SELECT id FROM users WHERE id = $1', [userId]
+    );
+    expect(users).toHaveLength(1);
+
+    // Attempts counter must have been incremented to 1.
+    const { rows: otps } = await pool.query(
+      'SELECT attempts FROM otp_codes WHERE email = $1 AND purpose = $2',
+      [USER.email, 'delete']
+    );
+    expect(otps[0].attempts).toBe(1);
+  });
+});
+
+// ── Session revocation on password change ─────────────────────────────────────
+
+describe('PUT /api/v1/auth/change-password', () => {
+  test('old refresh token is rejected after a successful password change', async () => {
+    const { body: { accessToken, refreshToken } } = await createVerifiedUser();
+
+    const changeRes = await agent
+      .put('/api/v1/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ old_password: USER.password, new_password: 'NewValidPass2!' });
+    expect(changeRes.status).toBe(200);
+
+    const res = await agent
+      .post('/api/v1/auth/refresh')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ refreshToken });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /api/v1/auth/reset-password (session revocation)', () => {
+  test('old refresh token is rejected after a successful password reset', async () => {
+    const { body: { refreshToken } } = await createVerifiedUser();
+
+    await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email });
+
+    const { rows } = await pool.query(
+      'SELECT token FROM password_reset_tokens WHERE email = $1 AND used = false',
+      [USER.email]
+    );
+    const resetToken = rows[0].token;
+
+    const resetRes = await agent
+      .post('/api/v1/auth/reset-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ token: resetToken, new_password: 'NewValidPass2!' });
+    expect(resetRes.status).toBe(200);
+
+    const res = await agent
+      .post('/api/v1/auth/refresh')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ refreshToken });
+
+    expect(res.status).toBe(401);
+  });
+});
