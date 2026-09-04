@@ -276,21 +276,39 @@ describe('POST /api/v1/auth/refresh', () => {
     expect(res.body.refreshToken).not.toBe(refreshToken);
   });
 
-  test('used refresh token returns 401', async () => {
-    await createVerifiedUser();
-    const { refreshToken } = await loginUser();
+  test('reusing a just-rotated refresh token within the grace window returns the same token pair', async () => {
+    const { body: { refreshToken: oldToken } } = await createVerifiedUser();
 
-    // Consume the token
+    const firstRes = await agent
+      .post('/api/v1/auth/refresh')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ refreshToken: oldToken });
+    expect(firstRes.status).toBe(200);
+
+    const secondRes = await agent
+      .post('/api/v1/auth/refresh')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ refreshToken: oldToken });
+
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.body.accessToken).toBe(firstRes.body.accessToken);
+    expect(secondRes.body.refreshToken).toBe(firstRes.body.refreshToken);
+  });
+
+  test('reusing an old refresh token after the grace window expires returns 401', async () => {
+    const { body: { refreshToken: oldToken } } = await createVerifiedUser();
+
     await agent
       .post('/api/v1/auth/refresh')
       .set('X-CSRF-Token', csrfToken)
-      .send({ refreshToken });
+      .send({ refreshToken: oldToken });
 
-    // Try to reuse it
+    await redis.del(`grace:${oldToken}`);
+
     const res = await agent
       .post('/api/v1/auth/refresh')
       .set('X-CSRF-Token', csrfToken)
-      .send({ refreshToken });
+      .send({ refreshToken: oldToken });
 
     expect(res.status).toBe(401);
   });

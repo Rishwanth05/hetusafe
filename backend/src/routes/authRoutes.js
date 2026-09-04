@@ -321,8 +321,13 @@ router.post('/refresh', async (req, res, next) => {
       [refreshToken]
     );
 
-    if (tokenRows.length === 0)
+    if (tokenRows.length === 0) {
+      try {
+        const cached = await redis.get(`grace:${refreshToken}`);
+        if (cached) return res.json(JSON.parse(cached));
+      } catch {}
       return res.status(401).json({ message: 'Invalid or expired refresh token' });
+    }
 
     const userResult = await pool.query(
       `SELECT id, name, email, role FROM users WHERE id = $1`,
@@ -346,6 +351,17 @@ router.post('/refresh', async (req, res, next) => {
       process.env.JWT_SECRET,
       { expiresIn: '15m' }
     );
+
+    try {
+      await redis.set(
+        `grace:${refreshToken}`,
+        JSON.stringify({ accessToken: newAccessToken, refreshToken: newRefreshToken }),
+        'EX',
+        30
+      );
+    } catch (err) {
+      console.error('Failed to write refresh grace key:', err.message);
+    }
 
     res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (err) {
