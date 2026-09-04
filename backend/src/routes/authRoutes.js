@@ -464,6 +464,7 @@ router.put('/change-password', verifyToken, validate(changePasswordSchema), asyn
 
     const password_hash = await bcrypt.hash(new_password, 12);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, req.user.id]);
+    await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [req.user.id]);
     res.json({ message: 'Password changed ✅' });
   } catch (err) {
     next(err);
@@ -623,6 +624,7 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res, n
     await pool.query('INSERT INTO password_history (user_id, password_hash) VALUES ($1, $2)', [userId, password_hash]);
     await pool.query('UPDATE password_reset_tokens SET used = true WHERE token = $1', [token]);
     await pool.query('DELETE FROM otp_codes WHERE email = $1', [record.email]);
+    await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
 
     res.json({ message: 'Password reset successful. Please log in.' });
   } catch (err) {
