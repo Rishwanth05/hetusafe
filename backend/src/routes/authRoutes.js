@@ -376,6 +376,10 @@ router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), async (req, re
   try {
     const { email, purpose } = req.body;
 
+    const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (rows.length === 0)
+      return res.json({ message: 'OTP resent ✅' });
+
     const otp = generateOTP();
     const expires_at = new Date(Date.now() + 10 * 60 * 1000);
 

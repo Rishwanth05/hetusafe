@@ -600,3 +600,47 @@ describe('POST /api/v1/auth/reset-password (session revocation)', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ── Resend OTP ────────────────────────────────────────────────────────────────
+
+describe('POST /api/v1/auth/resend-otp', () => {
+  const { sendOTPEmail } = require('../utils/email');
+
+  beforeEach(() => {
+    sendOTPEmail.mockClear();
+  });
+
+  test('unregistered email returns 200 with generic message and does not send email', async () => {
+    const res = await agent
+      .post('/api/v1/auth/resend-otp')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'nobody@nowhere.example', purpose: 'verify' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('OTP resent ✅');
+    expect(sendOTPEmail).not.toHaveBeenCalled();
+  });
+
+  test('registered user receives a fresh OTP and sendOTPEmail is called', async () => {
+    await createVerifiedUser();
+
+    // mockClear() in beforeEach resets counts including the verify-email call above
+    sendOTPEmail.mockClear();
+
+    const res = await agent
+      .post('/api/v1/auth/resend-otp')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email, purpose: 'verify' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('OTP resent ✅');
+    expect(sendOTPEmail).toHaveBeenCalledTimes(1);
+
+    const { rows } = await pool.query(
+      'SELECT code FROM otp_codes WHERE email = $1 AND purpose = $2',
+      [USER.email, 'verify']
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].code).toMatch(/^\d{6}$/);
+  });
+});
