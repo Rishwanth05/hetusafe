@@ -13,6 +13,7 @@ import MyReports from './pages/MyReports'
 import Profile from './pages/Profile'
 import Leaderboard from './pages/Leaderboard'
 import Admin from './pages/Admin'
+import AllReports from './pages/AllReports'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import NotFound from './pages/NotFound'
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/all-reports" element={<ProtectedRoute><AllReports /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <InstallPrompt />

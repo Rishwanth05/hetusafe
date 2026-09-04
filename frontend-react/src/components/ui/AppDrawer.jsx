@@ -34,9 +34,10 @@ export default function AppDrawer({ open, onClose, drawerRef }) {
   }
 
   const menuItems = [
-    { label: 'Profile',     path: '/profile',     icon: '👤' },
-    { label: 'Leaderboard', path: '/leaderboard', icon: '🏆' },
-    { label: 'Contact',     path: '/contact',     icon: '📞' },
+    { label: 'Profile',     path: '/profile',      icon: '👤' },
+    { label: 'All Reports', path: '/all-reports',  icon: '📋' },
+    { label: 'Leaderboard', path: '/leaderboard',  icon: '🏆' },
+    { label: 'Contact',     path: '/contact',      icon: '📞' },
     ...(user?.role === 'admin' ? [{ label: 'Admin', path: '/admin', icon: '⚙️' }] : []),
   ]
 
