@@ -73,6 +73,18 @@ const authLimiter = rateLimit({
   store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
 });
 
+// POST /auth/refresh fires on every page load and on every 401 — it must not
+// share authLimiter's budget. 60 req / 15 min gives normal sessions headroom
+// while still capping abuse.
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many refresh attempts. Try again in 15 minutes.' },
+  store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
+});
+
 // SEC4 — CSRF protection on all state-changing routes (csrf-csrf double-submit cookie)
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET,
@@ -107,7 +119,21 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
 
-app.use('/api/v1/auth', authLimiter, doubleCsrfProtection, authRoutes);
+// authLimiter applied per-route rather than to the full /auth prefix:
+//   /login      → has its own loginLimiter (10/15min) in authRoutes.js
+//   /resend-otp → has its own otpLimiter   (3/30min)  in authRoutes.js
+//   /refresh    → gets refreshLimiter below; stacking authLimiter on top
+//                 would reproduce the original 429-on-page-load bug
+app.use([
+  '/api/v1/auth/signup',
+  '/api/v1/auth/verify-email',
+  '/api/v1/auth/verify-login',
+  '/api/v1/auth/forgot-password',
+  '/api/v1/auth/reset-password',
+  '/api/v1/auth/logout',
+], authLimiter);
+app.post('/api/v1/auth/refresh', refreshLimiter);
+app.use('/api/v1/auth', doubleCsrfProtection, authRoutes);
 app.use('/api/v1/reports', doubleCsrfProtection, reportRoutes);
 app.use('/api/v1/contact', doubleCsrfProtection, contactRoutes);
 app.use('/api/v1/badges', doubleCsrfProtection, badgeRoutes);
