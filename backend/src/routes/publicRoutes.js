@@ -4,7 +4,7 @@ const pool = require('../db');
 const router = express.Router();
 
 // LAND-2 — Public stats for landing page, no auth required
-router.get('/stats', async (req, res) => {
+router.get('/stats', async (req, res, next) => {
   try {
     const [reports, users, resolved, areas] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM reports'),
@@ -24,7 +24,7 @@ router.get('/stats', async (req, res) => {
       areas_covered: parseInt(areas.rows[0].count),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

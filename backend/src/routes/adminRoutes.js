@@ -28,7 +28,7 @@ const broadcastSchema = z.object({
 });
 
 // ── DASHBOARD STATS ────────────────────────────────────────────────────────────
-router.get('/stats', async (req, res) => {
+router.get('/stats', async (req, res, next) => {
   try {
     const [users, reports, resolved, critical] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM users'),
@@ -67,12 +67,12 @@ router.get('/stats', async (req, res) => {
       reports_by_severity: reportsBySeverity.rows,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── ALL USERS ──────────────────────────────────────────────────────────────────
-router.get('/users', async (req, res) => {
+router.get('/users', async (req, res, next) => {
   try {
     const { search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -98,12 +98,12 @@ router.get('/users', async (req, res) => {
 
     res.json({ users: result.rows, total: parseInt(total.rows[0].count) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── DELETE USER ────────────────────────────────────────────────────────────────
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', async (req, res, next) => {
   try {
     const target = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [req.params.id]);
     await pool.query('UPDATE reports SET user_id = NULL WHERE user_id = $1', [req.params.id]);
@@ -115,12 +115,12 @@ router.delete('/users/:id', async (req, res) => {
     );
     res.json({ message: 'User deleted ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── CHANGE USER ROLE ───────────────────────────────────────────────────────────
-router.put('/users/:id/role', async (req, res) => {
+router.put('/users/:id/role', async (req, res, next) => {
   try {
     const { role } = req.body;
     if (!['user', 'admin'].includes(role))
@@ -137,12 +137,12 @@ router.put('/users/:id/role', async (req, res) => {
     );
     res.json({ message: 'Role updated ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── ALL REPORTS ────────────────────────────────────────────────────────────────
-router.get('/reports', async (req, res) => {
+router.get('/reports', async (req, res, next) => {
   try {
     const { status, severity, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -168,12 +168,12 @@ router.get('/reports', async (req, res) => {
 
     res.json({ reports: result.rows, total: parseInt(total.rows[0].count) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── DELETED REPORTS (24-hour admin review window) ─────────────────────────────
-router.get('/reports/deleted', async (req, res) => {
+router.get('/reports/deleted', async (req, res, next) => {
   try {
     const { rows } = await pool.query(`
       SELECT dr.*, u.name AS reporter_name, u.email AS reporter_email
@@ -184,12 +184,12 @@ router.get('/reports/deleted', async (req, res) => {
     `)
     res.json(rows)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // ── UPDATE REPORT STATUS (ADMIN) ───────────────────────────────────────────────
-router.put('/reports/:id/status', async (req, res) => {
+router.put('/reports/:id/status', async (req, res, next) => {
   try {
     const { status, note } = req.body;
     const validStatuses = ['active', 'under_review', 'under_construction', 'being_monitored', 'partially_fixed', 'resolved'];
@@ -220,12 +220,12 @@ router.put('/reports/:id/status', async (req, res) => {
 
     res.json({ message: 'Status updated ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── DELETE REPORT ──────────────────────────────────────────────────────────────
-router.delete('/reports/:id', async (req, res) => {
+router.delete('/reports/:id', async (req, res, next) => {
   try {
     const target = await pool.query('SELECT id, hazard_type, status, severity FROM reports WHERE id = $1', [req.params.id]);
     await pool.query('DELETE FROM report_status_history WHERE report_id = $1', [req.params.id]);
@@ -238,12 +238,12 @@ router.delete('/reports/:id', async (req, res) => {
     );
     res.json({ message: 'Report deleted ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── ARCHIVE REPORT ────────────────────────────────────────────────────────────
-router.post('/reports/:id/archive', async (req, res) => {
+router.post('/reports/:id/archive', async (req, res, next) => {
   try {
     const target = await pool.query(
       'SELECT id, hazard_type, status, archived_at FROM reports WHERE id = $1',
@@ -265,12 +265,12 @@ router.post('/reports/:id/archive', async (req, res) => {
     );
     res.json({ message: 'Report archived ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── UNARCHIVE REPORT ──────────────────────────────────────────────────────────
-router.post('/reports/:id/unarchive', async (req, res) => {
+router.post('/reports/:id/unarchive', async (req, res, next) => {
   try {
     const target = await pool.query(
       'SELECT id, hazard_type, status, archived_at FROM reports WHERE id = $1',
@@ -293,12 +293,12 @@ router.post('/reports/:id/unarchive', async (req, res) => {
     );
     res.json({ message: 'Report unarchived ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── CHART-1: ANALYTICS DATA (30 days) ─────────────────────────────────────────
-router.get('/analytics', async (req, res) => {
+router.get('/analytics', async (req, res, next) => {
   try {
     const [byDay, byCategory, bySeverity, avgResolution] = await Promise.all([
       pool.query(`
@@ -334,12 +334,12 @@ router.get('/analytics', async (req, res) => {
       avg_resolution_hours: parseFloat(avgResolution.rows[0]?.hours ?? 0),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── BROADCAST ALERT ────────────────────────────────────────────────────────────
-router.post('/broadcast', validate(broadcastSchema), async (req, res) => {
+router.post('/broadcast', validate(broadcastSchema), async (req, res, next) => {
   try {
     const { title, message, severity } = req.body;
 
@@ -361,12 +361,12 @@ router.post('/broadcast', validate(broadcastSchema), async (req, res) => {
 
     res.json({ message: 'Alert broadcast sent ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── AUDIT LOG ──────────────────────────────────────────────────────────────────
-router.get('/audit-log', async (req, res) => {
+router.get('/audit-log', async (req, res, next) => {
   try {
     const { limit = 100, offset = 0 } = req.query;
     const result = await pool.query(
@@ -380,7 +380,7 @@ router.get('/audit-log', async (req, res) => {
     const total = await pool.query('SELECT COUNT(*) FROM admin_audit_log');
     res.json({ entries: result.rows, total: parseInt(total.rows[0].count) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

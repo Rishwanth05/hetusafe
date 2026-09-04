@@ -1,21 +1,7 @@
 const express = require('express')
 const pool = require('../db')
-const jwt = require('jsonwebtoken')
+const { verifyToken } = require('../middleware/auth')
 const router = express.Router()
-
-const verifyToken = (req, res, next) => {
-  const auth = req.headers.authorization
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'No token provided' })
-  }
-  try {
-    const decoded = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET)
-    req.user = decoded
-    next()
-  } catch {
-    return res.status(401).json({ message: 'Invalid token' })
-  }
-}
 
 const BADGE_DEFS = [
   {
@@ -48,7 +34,7 @@ const BADGE_DEFS = [
   },
 ]
 
-router.get('/me', verifyToken, async (req, res) => {
+router.get('/me', verifyToken, async (req, res, next) => {
   try {
     const userId = req.user.id
     const submittedRes = await pool.query('SELECT COUNT(*) FROM reports WHERE user_id = $1', [userId])
@@ -69,11 +55,11 @@ router.get('/me', verifyToken, async (req, res) => {
     }))
     res.json({ stats, badges })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
-router.get('/leaderboard', async (req, res) => {
+router.get('/leaderboard', async (req, res, next) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -102,7 +88,7 @@ router.get('/leaderboard', async (req, res) => {
     })
     res.json(rows)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
