@@ -69,6 +69,7 @@ export default function Privacy() {
             <div style={{ display: 'inline-block', background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.2)', color: '#4ade80', fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', padding: '4px 14px', borderRadius: '999px', marginBottom: '16px' }}>Legal</div>
             <h1 style={{ fontSize: '38px', fontWeight: '900', letterSpacing: '-1px', marginBottom: '10px' }}>Privacy Policy</h1>
             <p style={{ color: '#64748b', fontSize: '14px' }}>Last updated: 3 September 2026 · Effective: 3 September 2026</p>
+            <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>Hetusafe was created by Adamala Rishwanth Reddy to help communities report and resolve local hazards faster.</p>
           </div>
 
           <Section id="overview" title="Overview">
