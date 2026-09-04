@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const sgMail = require('@sendgrid/mail');
 require('dotenv').config();
 
@@ -6,7 +7,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const FROM = process.env.SENDGRID_FROM;
 
 function generateOTP() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 async function sendOTPEmail(toEmail, otp, purpose = 'verify') {
