@@ -537,19 +537,32 @@ router.delete('/delete-account', verifyToken, async (req, res, next) => {
       });
     }
 
-    await pool.query(`UPDATE reports SET user_id = NULL WHERE user_id = $1`, [req.user.id]);
+    let dbClient
+    try {
+      dbClient = await pool.connect()
+      await dbClient.query('BEGIN')
 
-    if (reason) {
-      await pool.query(
-        `INSERT INTO account_deletions (email, reason, comments, deleted_at) VALUES ($1, $2, $3, NOW())`,
-        [email, reason, comments || null]
-      );
+      await dbClient.query(`UPDATE reports SET user_id = NULL WHERE user_id = $1`, [req.user.id])
+
+      if (reason) {
+        await dbClient.query(
+          `INSERT INTO account_deletions (email, reason, comments, deleted_at) VALUES ($1, $2, $3, NOW())`,
+          [email, reason, comments || null]
+        )
+      }
+
+      await dbClient.query(`DELETE FROM otp_codes WHERE email = $1`, [email])
+      await dbClient.query(`DELETE FROM users WHERE id = $1`, [req.user.id])
+
+      await dbClient.query('COMMIT')
+    } catch (txErr) {
+      if (dbClient) await dbClient.query('ROLLBACK').catch(() => {})
+      throw txErr
+    } finally {
+      if (dbClient) dbClient.release()
     }
 
-    await pool.query(`DELETE FROM otp_codes WHERE email = $1`, [email]);
-    await pool.query(`DELETE FROM users WHERE id = $1`, [req.user.id]);
-
-    res.json({ message: 'Account permanently deleted.' });
+    res.json({ message: 'Account permanently deleted.' })
   } catch (err) {
     next(err);
   }
