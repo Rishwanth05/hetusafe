@@ -89,7 +89,7 @@ async function issueTokens(user) {
 }
 
 // ── SIGNUP (step 1) ────────────────────────────────────────────────────────────
-router.post('/signup', validate(signupSchema), async (req, res) => {
+router.post('/signup', validate(signupSchema), async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
     const clean_name = xss(name);
@@ -122,12 +122,12 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
     res.json({ message: 'OTP sent to your email', email });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── VERIFY EMAIL OTP ───────────────────────────────────────────────────────────
-router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
+router.post('/verify-email', validate(verifyEmailSchema), async (req, res, next) => {
   try {
     const { email, otp } = req.body;
 
@@ -180,12 +180,12 @@ router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
 
     res.json({ message: 'Email verified ✅', accessToken, refreshToken, user: user.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── LOGIN (step 1) ─────────────────────────────────────────────────────────────
-router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
+router.post('/login', loginLimiter, validate(loginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -249,12 +249,12 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
     await sendOTPEmail(email, otp, 'login');
     res.json({ message: 'OTP sent to your email', email });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── VERIFY LOGIN OTP ───────────────────────────────────────────────────────────
-router.post('/verify-login', validate(verifyLoginSchema), async (req, res) => {
+router.post('/verify-login', validate(verifyLoginSchema), async (req, res, next) => {
   try {
     const { email, otp } = req.body;
 
@@ -303,12 +303,12 @@ router.post('/verify-login', validate(verifyLoginSchema), async (req, res) => {
 
     res.json({ message: 'Login successful ✅', accessToken, refreshToken, user: user.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── REFRESH TOKEN ──────────────────────────────────────────────────────────────
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken)
@@ -348,12 +348,12 @@ router.post('/refresh', async (req, res) => {
 
     res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── LOGOUT ─────────────────────────────────────────────────────────────────────
-router.post('/logout', verifyToken, async (req, res) => {
+router.post('/logout', verifyToken, async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
     const accessToken = req.headers.authorization.split(' ')[1];
@@ -366,12 +366,12 @@ router.post('/logout', verifyToken, async (req, res) => {
 
     res.json({ message: 'Logged out ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── RESEND OTP ─────────────────────────────────────────────────────────────────
-router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), async (req, res) => {
+router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), async (req, res, next) => {
   try {
     const { email, purpose } = req.body;
 
@@ -389,24 +389,24 @@ router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), async (req, re
     await sendOTPEmail(email, otp, purpose);
     res.json({ message: 'OTP resent ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── SAVE FCM TOKEN ─────────────────────────────────────────────────────────────
-router.post('/fcm-token', verifyToken, async (req, res) => {
+router.post('/fcm-token', verifyToken, async (req, res, next) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ message: 'token is required' });
     await pool.query('UPDATE users SET fcm_token = $1 WHERE id = $2', [token, req.user.id]);
     res.json({ message: 'FCM token saved ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── GET MY PROFILE ─────────────────────────────────────────────────────────────
-router.get('/me', verifyToken, async (req, res) => {
+router.get('/me', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, role, created_at, is_verified, trust_score, badge_tier
@@ -415,12 +415,12 @@ router.get('/me', verifyToken, async (req, res) => {
     );
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── GET MY REPORTS ─────────────────────────────────────────────────────────────
-router.get('/my-reports', verifyToken, async (req, res) => {
+router.get('/my-reports', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
       'SELECT * FROM reports WHERE user_id = $1 ORDER BY created_at DESC',
@@ -428,12 +428,12 @@ router.get('/my-reports', verifyToken, async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── UPDATE NAME ────────────────────────────────────────────────────────────────
-router.put('/update-name', verifyToken, async (req, res) => {
+router.put('/update-name', verifyToken, async (req, res, next) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim())
@@ -447,12 +447,12 @@ router.put('/update-name', verifyToken, async (req, res) => {
     );
     res.json({ message: 'Name updated ✅', user: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── CHANGE PASSWORD ────────────────────────────────────────────────────────────
-router.put('/change-password', verifyToken, validate(changePasswordSchema), async (req, res) => {
+router.put('/change-password', verifyToken, validate(changePasswordSchema), async (req, res, next) => {
   try {
     const { old_password, new_password } = req.body;
 
@@ -466,12 +466,12 @@ router.put('/change-password', verifyToken, validate(changePasswordSchema), asyn
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, req.user.id]);
     res.json({ message: 'Password changed ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── REQUEST ACCOUNT DELETION OTP ───────────────────────────────────────────────
-router.post('/request-delete', verifyToken, async (req, res) => {
+router.post('/request-delete', verifyToken, async (req, res, next) => {
   try {
     const user = await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id]);
     const email = user.rows[0].email;
@@ -490,12 +490,12 @@ router.post('/request-delete', verifyToken, async (req, res) => {
     await sendOTPEmail(email, otp, 'delete');
     res.json({ message: 'Deletion OTP sent to your email' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── CONFIRM ACCOUNT DELETION ───────────────────────────────────────────────────
-router.delete('/delete-account', verifyToken, async (req, res) => {
+router.delete('/delete-account', verifyToken, async (req, res, next) => {
   try {
     const { otp, reason, comments } = req.body;
     if (!otp) return res.status(400).json({ message: 'OTP required' });
@@ -550,12 +550,12 @@ router.delete('/delete-account', verifyToken, async (req, res) => {
 
     res.json({ message: 'Account permanently deleted.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── FORGOT PASSWORD ────────────────────────────────────────────────────────────
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', async (req, res, next) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email required' });
@@ -579,12 +579,12 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── RESET PASSWORD ─────────────────────────────────────────────────────────────
-router.post('/reset-password', validate(resetPasswordSchema), async (req, res) => {
+router.post('/reset-password', validate(resetPasswordSchema), async (req, res, next) => {
   try {
     const { token, new_password } = req.body;
 
@@ -626,12 +626,12 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res) =
 
     res.json({ message: 'Password reset successful. Please log in.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /auth/emergency-contacts — fetch user's emergency contacts
-router.get('/emergency-contacts', verifyToken, async (req, res) => {
+router.get('/emergency-contacts', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
       'SELECT emergency_contacts FROM users WHERE id = $1',
@@ -639,12 +639,12 @@ router.get('/emergency-contacts', verifyToken, async (req, res) => {
     );
     res.json(result.rows[0]?.emergency_contacts || []);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT /auth/emergency-contacts — save user's emergency contacts
-router.put('/emergency-contacts', verifyToken, validate(emergencyContactsSchema), async (req, res) => {
+router.put('/emergency-contacts', verifyToken, validate(emergencyContactsSchema), async (req, res, next) => {
   try {
     const { contacts } = req.body;
     await pool.query(
@@ -653,7 +653,7 @@ router.put('/emergency-contacts', verifyToken, validate(emergencyContactsSchema)
     );
     res.json({ message: 'Emergency contacts saved', contacts });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

@@ -93,15 +93,8 @@ router.post("/send", async (req, res) => {
         "Delivery happens after acceptance. Check SendGrid Email Activity for Delivered (250) or Deferred (421).",
     });
   } catch (err) {
-    const sg = err?.response?.body || null;
-
-    console.error("❌ SendGrid error:", sg || err.message);
-
-    return res.status(500).json({
-      message: "Email send failed",
-      error: err.message,
-      sendgrid: sg,
-    });
+    console.error("❌ SendGrid error:", err?.response?.body || err.message);
+    return res.status(500).json({ message: "We couldn't send your message right now — please try again or email us directly." });
   }
 });
 

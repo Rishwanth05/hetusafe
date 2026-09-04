@@ -14,42 +14,42 @@ const categorySchema = z.object({
 
 // ── Public read endpoints ──────────────────────────────────────────────────────
 
-router.get('/categories', async (req, res) => {
+router.get('/categories', async (req, res, next) => {
   try {
     const result = await pool.query(
       'SELECT * FROM hazard_categories WHERE is_active = true ORDER BY name'
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-router.get('/severities', async (req, res) => {
+router.get('/severities', async (req, res, next) => {
   try {
     const result = await pool.query(
       'SELECT * FROM severity_levels WHERE is_active = true ORDER BY sort_order'
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-router.get('/statuses', async (req, res) => {
+router.get('/statuses', async (req, res, next) => {
   try {
     const result = await pool.query(
       'SELECT * FROM report_statuses WHERE is_active = true ORDER BY name'
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ── Admin-only write endpoints ─────────────────────────────────────────────────
 
-router.post('/categories', verifyToken, requireAdmin, validate(categorySchema), async (req, res) => {
+router.post('/categories', verifyToken, requireAdmin, validate(categorySchema), async (req, res, next) => {
   try {
     const { name, icon } = req.body;
     const result = await pool.query(
@@ -58,11 +58,11 @@ router.post('/categories', verifyToken, requireAdmin, validate(categorySchema), 
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-router.patch('/categories/:id/toggle', verifyToken, requireAdmin, async (req, res) => {
+router.patch('/categories/:id/toggle', verifyToken, requireAdmin, async (req, res, next) => {
   try {
     const result = await pool.query(
       'UPDATE hazard_categories SET is_active = NOT is_active WHERE id = $1 RETURNING *',
@@ -72,7 +72,7 @@ router.patch('/categories/:id/toggle', verifyToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'Category not found' });
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

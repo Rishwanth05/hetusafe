@@ -6795,6 +6795,10 @@ button {
               <a href="#features">
                 Features
               </a>
+
+              <a href="/about">
+                About
+              </a>
             </div>
 
             <div className="footer-column">
