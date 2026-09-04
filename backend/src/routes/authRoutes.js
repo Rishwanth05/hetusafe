@@ -4,25 +4,14 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const xss = require('xss');
 const pool = require('../db');
-const { generateOTP, sendOTPEmail } = require('../utils/email');
+const { generateOTP, sendOTPEmail, sendResetEmail } = require('../utils/email');
 const { verifyToken } = require('../middleware/auth');
 const redis = require('../config/redis');
 const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
+const validate = require('../middleware/validate');
 
 const router = express.Router();
-
-// ── Validation middleware ─────────────────────────────────────────────────────
-function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0].message });
-    }
-    req.body = result.data;
-    next();
-  };
-}
 
 // Reused field schemas
 const emailField = z.string().trim().email('Invalid email address');
@@ -586,7 +575,6 @@ router.post('/forgot-password', async (req, res, next) => {
 
     const primaryOrigin = (process.env.FRONTEND_URL || '').split(',')[0].trim();
     const resetLink = `${primaryOrigin}/reset-password?token=${token}`;
-    const { sendResetEmail } = require('../utils/email');
     await sendResetEmail(email, resetLink);
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });

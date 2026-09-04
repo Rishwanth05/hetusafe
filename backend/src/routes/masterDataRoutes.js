@@ -2,20 +2,9 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { z } = require('zod');
+const validate = require('../middleware/validate');
 
 const router = express.Router();
-
-// ── Validation middleware ─────────────────────────────────────────────────────
-function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0].message });
-    }
-    req.body = result.data;
-    next();
-  };
-}
 
 // icon is an emoji field — max 20 chars covers multi-codepoint ZWJ sequences.
 const categorySchema = z.object({
