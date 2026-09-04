@@ -1,7 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import Map from '../components/Map'
 import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
 import { io } from 'socket.io-client'
@@ -12,7 +10,6 @@ const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
 /* ── Small helper ────────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   // ── All state from original (unchanged) ────────────────────────────────
@@ -20,13 +17,6 @@ export default function Dashboard() {
   const [loading, setLoading]               = useState(true)
   const [newReportFlash, setNewReportFlash] = useState(null)
   const socketRef = useRef(null)
-
-  const [radiusKm, setRadiusKm]         = useState(null)
-  const [userLocation, setUserLocation] = useState(null)
-
-  const [filterStatus, setFilterStatus]     = useState('all')
-  const [filterSeverity, setFilterSeverity] = useState('all')
-  const [searchQuery, setSearchQuery]       = useState('')
 
   const [menuOpen, setMenuOpen] = useState(false)
   const navMenuRef = useRef(null)
@@ -136,12 +126,6 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [nearbyCoords])
 
-  // ── All handlers from original (unchanged) ──────────────────────────────
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
   // ── Nominatim area search (used when geolocation is denied) ────────────
   const handleAreaSearch = async () => {
     if (!areaInput.trim()) return
@@ -181,70 +165,12 @@ export default function Dashboard() {
     return `${km.toFixed(1)} km away`
   }
 
-  // MAP4 — Haversine distance
-  const getDistanceKm = (lat1, lng1, lat2, lng2) => {
-    const R = 6371
-    const dLat = (lat2 - lat1) * Math.PI / 180
-    const dLng = (lng2 - lng1) * Math.PI / 180
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLng / 2) ** 2
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  }
-
-  // These derived values are kept intact for potential re-use by
-  // other views (Results, Map) and the radius filter handler below.
-  const filteredReports = radiusKm && userLocation
-    ? reports.filter(r =>
-        getDistanceKm(userLocation.lat, userLocation.lng,
-          parseFloat(r.latitude), parseFloat(r.longitude)) <= radiusKm
-      )
-    : reports
-
-  const tableReports = filteredReports
-    .filter(r => filterStatus   === 'all' || r.status   === filterStatus)
-    .filter(r => filterSeverity === 'all' || r.severity === filterSeverity)
-    .filter(r => {
-      if (!searchQuery) return true
-      const q = searchQuery.toLowerCase()
-      return (
-        r.hazard_type?.toLowerCase().includes(q) ||
-        r.description?.toLowerCase().includes(q)
-      )
-    })
-
-  const handleRadiusChange = (km) => {
-    setRadiusKm(km)
-    if (km && !userLocation) {
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) => setUserLocation({ lat: coords.latitude, lng: coords.longitude }),
-        () => alert('Enable location access to use radius filter')
-      )
-    }
-  }
-
-  const initials = (user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-
   // ── Derived stats (from existing reports data — no new API calls) ───────
   const resolvedCount = reports.filter(r => r.status === 'resolved').length
   const activeCount   = reports.filter(r => r.status !== 'resolved').length
   const rateStr = reports.length > 0
     ? Math.round((resolvedCount / reports.length) * 100) + '%'
     : '—'
-
-  // ── Drawer nav items ────────────────────────────────────────────────────
-  const menuItems = [
-    { label: 'Dashboard',     path: '/dashboard',   icon: '🏠' },
-    { label: 'Report Hazard', path: '/report',      icon: '📝' },
-    { label: 'View Map',      path: '/results',     icon: '🗺️' },
-    { label: 'Emergency',     path: '/emergency',   icon: '🚨' },
-    { label: 'Leaderboard',   path: '/leaderboard', icon: '🏆' },
-    { label: 'Contact',       path: '/contact',     icon: '📞' },
-    { label: 'Profile',       path: '/profile',     icon: '👤' },
-    ...(user?.role === 'admin'
-      ? [{ label: 'Admin', path: '/admin', icon: '⚙️' }]
-      : []),
-  ]
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (

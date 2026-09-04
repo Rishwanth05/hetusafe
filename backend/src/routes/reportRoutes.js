@@ -158,7 +158,7 @@ async function dailyReportLimit(req, res, next) {
   }
 }
 
-router.get("/all", verifyToken, async (req, res) => {
+router.get("/all", verifyToken, async (req, res, next) => {
   try {
     try {
       const cached = await getCache('reports:all');
@@ -199,14 +199,14 @@ router.get("/all", verifyToken, async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /reports/nearby — distance-sorted feed for the Home page "Near You" widget.
 // Reuses Pattern B (Haversine in km) from /check-duplicate.
 // Applies the same archived_at + auto-hide rules as GET /all.
-router.get('/nearby', verifyToken, async (req, res) => {
+router.get('/nearby', verifyToken, async (req, res, next) => {
   const parsed = nearbyQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0].message });
@@ -247,12 +247,12 @@ router.get('/nearby', verifyToken, async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // TRUST-1 — Get user trust score
-router.get('/trust/:userId', async (req, res) => {
+router.get('/trust/:userId', async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT trust_score, badge_tier FROM users WHERE id = $1`,
@@ -262,7 +262,7 @@ router.get('/trust/:userId', async (req, res) => {
       return res.status(404).json({ message: 'User not found' })
     res.json(result.rows[0])
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -277,7 +277,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
     }
     next()
   })
-}, validate(createReportSchema), async (req, res) => {
+}, validate(createReportSchema), async (req, res, next) => {
   try {
     const {
       hazard_type, severity, description,
@@ -378,7 +378,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
     res.status(201).json({ message: "Report created ✅", report: newReport });
   } catch (err) {
     console.error('Report create error:', err)
-    res.status(500).json({ error: err.message, stack: err.stack });
+    next(err);
   }
 });
 
@@ -393,7 +393,7 @@ router.post("/resolve", verifyToken, (req, res, next) => {
     }
     next()
   })
-}, async (req, res) => {
+}, async (req, res, next) => {
   try {
     const { report_id } = req.body;
 
@@ -467,12 +467,12 @@ router.post("/resolve", verifyToken, (req, res, next) => {
 
     res.json({ message: "Report resolved ✅", proofUrl: proof_url });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DUP1 — Duplicate detection: check 50m radius + same category + 24hr window
-router.post("/check-duplicate", validate(checkDuplicateSchema), async (req, res) => {
+router.post("/check-duplicate", validate(checkDuplicateSchema), async (req, res, next) => {
   try {
     const { latitude, longitude, hazard_type } = req.body
 
@@ -502,12 +502,12 @@ router.post("/check-duplicate", validate(checkDuplicateSchema), async (req, res)
 
     res.json({ isDuplicate: false })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 });
 
 // DELETE /reports/:id — owner self-delete within the 6-hour window
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res, next) => {
   const reportId = parseInt(req.params.id, 10)
   if (isNaN(reportId)) return res.status(400).json({ message: 'Invalid report ID' })
 
@@ -570,14 +570,14 @@ router.delete('/:id', verifyToken, async (req, res) => {
     res.json({ message: 'Report deleted' })
   } catch (err) {
     if (dbClient) await dbClient.query('ROLLBACK').catch(() => {})
-    res.status(500).json({ error: err.message })
+    next(err)
   } finally {
     if (dbClient) dbClient.release()
   }
 })
 
 // GET /reports/:id/votes — fetch vote counts + user's own vote
-router.get('/:id/votes', verifyToken, async (req, res) => {
+router.get('/:id/votes', verifyToken, async (req, res, next) => {
   try {
     const reportId = req.params.id;
     const userId = req.user.id;
@@ -598,12 +598,12 @@ router.get('/:id/votes', verifyToken, async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // POST /reports/:id/vote — cast or change a vote
-router.post('/:id/vote', verifyToken, async (req, res) => {
+router.post('/:id/vote', verifyToken, async (req, res, next) => {
   try {
     const reportId = req.params.id;
     const userId = req.user.id;
@@ -630,7 +630,7 @@ router.post('/:id/vote', verifyToken, async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

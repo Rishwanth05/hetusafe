@@ -5,7 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 const router = express.Router();
 
 // GET notifications — return rows targeted to this user OR global (user_id IS NULL)
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(`
       SELECT * FROM notifications
@@ -16,12 +16,12 @@ router.get('/', verifyToken, async (req, res) => {
     `, [req.user.id]);
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET unread count — only count rows visible to this user
-router.get('/unread-count', verifyToken, async (req, res) => {
+router.get('/unread-count', verifyToken, async (req, res, next) => {
   try {
     const lastRead = await pool.query(
       `SELECT read_at FROM notification_reads WHERE user_id = $1`,
@@ -39,12 +39,12 @@ router.get('/unread-count', verifyToken, async (req, res) => {
 
     res.json({ count: parseInt(count.rows[0].count) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT mark all read
-router.put('/read-all', verifyToken, async (req, res) => {
+router.put('/read-all', verifyToken, async (req, res, next) => {
   try {
     await pool.query(
       `INSERT INTO notification_reads (user_id, read_at)
@@ -54,13 +54,13 @@ router.put('/read-all', verifyToken, async (req, res) => {
     );
     res.json({ message: 'Marked as read ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /clear-all — soft-delete all rows this user can see (their own + global)
 // MUST be declared before /:id so Express doesn't treat "clear-all" as an :id value
-router.delete('/clear-all', verifyToken, async (req, res) => {
+router.delete('/clear-all', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
       `UPDATE notifications
@@ -75,12 +75,12 @@ router.delete('/clear-all', verifyToken, async (req, res) => {
       count: result.rowCount,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /:id — soft-delete a single notification this user can see
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
       `UPDATE notifications
@@ -95,7 +95,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Notification not found' });
     res.json({ message: 'Notification deleted ✅' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
