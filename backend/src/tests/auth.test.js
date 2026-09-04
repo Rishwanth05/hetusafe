@@ -303,6 +303,29 @@ describe('POST /api/v1/auth/refresh', () => {
 
     expect(res.status).toBe(401);
   });
+
+  test('returns 401 (not 500) when user account was deleted after token was issued', async () => {
+    const { body: { user } } = await createVerifiedUser();
+
+    // Capture the refresh token before the user is deleted
+    const { rows: [{ token: refreshToken }] } = await pool.query(
+      'SELECT token FROM refresh_tokens WHERE user_id = $1',
+      [user.id]
+    );
+
+    // Simulate an out-of-band deletion (e.g. admin action). ON DELETE CASCADE
+    // on refresh_tokens removes the token row too — so the 401 comes from the
+    // token-not-found guard, not the user-not-found guard. Both return 401;
+    // this test verifies no crash occurs in either case.
+    await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+
+    const res = await agent
+      .post('/api/v1/auth/refresh')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ refreshToken });
+
+    expect(res.status).toBe(401);
+  });
 });
 
 // ── Protected Routes ──────────────────────────────────────────────────────────

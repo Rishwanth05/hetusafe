@@ -314,27 +314,28 @@ router.post('/refresh', async (req, res, next) => {
     if (!refreshToken)
       return res.status(401).json({ message: 'Refresh token required' });
 
-    const result = await pool.query(
-      `SELECT * FROM refresh_tokens WHERE token = $1 AND expires_at > NOW()`,
+    // Atomically consume the token. Concurrent requests race to this DELETE;
+    // only one gets a row back — the second sees zero rows and gets 401.
+    const { rows: tokenRows } = await pool.query(
+      `DELETE FROM refresh_tokens WHERE token = $1 AND expires_at > NOW() RETURNING user_id`,
       [refreshToken]
     );
 
-    if (result.rows.length === 0)
+    if (tokenRows.length === 0)
       return res.status(401).json({ message: 'Invalid or expired refresh token' });
-
-    const tokenRow = result.rows[0];
 
     const userResult = await pool.query(
       `SELECT id, name, email, role FROM users WHERE id = $1`,
-      [tokenRow.user_id]
+      [tokenRows[0].user_id]
     );
     const user = userResult.rows[0];
+    if (!user)
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
 
-    // Rotate: delete old, insert new
+    // Rotate: insert new token pair
     const newRefreshToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
     await pool.query(
       `INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
       [user.id, newRefreshToken, expiresAt]
