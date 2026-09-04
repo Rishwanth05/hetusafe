@@ -1,27 +1,17 @@
 const express = require("express");
+const crypto = require("crypto");
 const pool = require("../db");
 const multer = require("multer");
 const xss = require("xss");
 const { sendPushNotification } = require("../config/firebase");
 const redis = require("../config/redis");
-const { getCache, setCache } = require("../config/redis");
+const { getCache, setCache } = redis;
 const { verifyToken } = require('../middleware/auth');
 const sharp = require('sharp');
 const { z } = require('zod');
+const validate = require('../middleware/validate');
 
 const router = express.Router();
-
-// ── Validation middleware (same pattern as authRoutes.js) ─────────────────────
-function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0].message });
-    }
-    req.body = result.data;
-    next();
-  };
-}
 
 // Shared coordinate fields. /create sends multipart (lat/lng arrive as strings),
 // so z.coerce.number() is used for both routes for consistency.
@@ -109,7 +99,7 @@ async function processAndUploadImage(buffer) {
   // explicitly rejects SharedArrayBuffer when serialising the S3 request body.
   const safeBuffer = Buffer.from(await sharp(buffer).webp({ quality: 80 }).toBuffer())
 
-  const key = `uploads/${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`
+  const key = `uploads/${crypto.randomUUID()}.webp`
   await s3.send(new PutObjectCommand({
     Bucket: process.env.S3_BUCKET_NAME,
     Key: key,
@@ -552,17 +542,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     await dbClient.query('DELETE FROM reports WHERE id = $1', [reportId])
 
     // Reverse the +10 trust credit from submission, flooring at 0
-    const scoreResult = await dbClient.query(
-      `UPDATE users SET trust_score = GREATEST(0, trust_score - 10) WHERE id = $1 RETURNING trust_score`,
-      [req.user.id]
-    )
-    const score = scoreResult.rows[0]?.trust_score ?? 0
-    const tier =
-      score >= 800 ? 'Hero' :
-      score >= 600 ? 'Guardian' :
-      score >= 400 ? 'Trusted' :
-      score >= 200 ? 'Reporter' : 'Newcomer'
-    await dbClient.query('UPDATE users SET badge_tier = $1 WHERE id = $2', [tier, req.user.id])
+    await updateTrustScore(dbClient, req.user.id, -10)
 
     await dbClient.query('COMMIT')
     try { await redis.del('reports:all') } catch {}

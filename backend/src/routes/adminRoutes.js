@@ -3,23 +3,12 @@ const pool = require('../db');
 const redis = require('../config/redis');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { z } = require('zod');
+const validate = require('../middleware/validate');
 
 const router = express.Router();
 
 // All admin routes require auth + admin role
 router.use(verifyToken, requireAdmin);
-
-// ── Validation middleware ─────────────────────────────────────────────────────
-function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0].message });
-    }
-    req.body = result.data;
-    next();
-  };
-}
 
 const broadcastSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or less'),

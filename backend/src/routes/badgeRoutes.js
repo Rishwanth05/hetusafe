@@ -96,8 +96,9 @@ router.get('/leaderboard', async (req, res) => {
         reports_submitted: row.reports_submitted,
         reports_resolved: row.reports_resolved,
       }
-      const badge_count = BADGE_DEFS.filter((b) => b.check(stats)).length
-      const top_badge = BADGE_DEFS.filter((b) => b.check(stats)).slice(-1)[0]
+      const earned = BADGE_DEFS.filter((b) => b.check(stats))
+      const badge_count = earned.length
+      const top_badge = earned[earned.length - 1]
       return { ...row, badge_count, top_badge: top_badge ? top_badge.emoji : null }
     })
     res.json(rows)
