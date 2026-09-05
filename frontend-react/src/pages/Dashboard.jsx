@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import client from '../api/client'
+import client, { getAccessToken } from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
 import { io } from 'socket.io-client'
 import { Button, BottomNav, StatCard, Card, AppDrawer, PriorityBadge } from '../components/ui'
@@ -54,7 +54,7 @@ export default function Dashboard() {
   // RT-2 — Socket.io real-time listener
   useEffect(() => {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    socketRef.current = io(API_URL, { withCredentials: true })
+    socketRef.current = io(API_URL, { withCredentials: true, auth: { token: getAccessToken() } })
 
     socketRef.current.on('connect', () => {})
 

@@ -20,6 +20,7 @@ const app = require('./app');
 // NOTIF3 — background cleanup job
 const { startCleanupJob } = require('./jobs/cleanupNotifications');
 const { startDailyBackup } = require('./jobs/dailyBackup');
+const socketAuth = require('./middleware/socketAuth');
 
 const fs = require('fs');
 const path = require('path');
@@ -47,6 +48,9 @@ const io = new Server(server, {
 
 // RT-1 — Make io accessible in routes via app
 app.set('io', io);
+
+// Reject connections that don't supply a valid JWT at handshake time.
+io.use(socketAuth);
 
 io.on('connection', (socket) => {
   console.log(`🔌 Client connected: ${socket.id}`);
