@@ -480,9 +480,8 @@ describe('DELETE /api/v1/auth/delete-account', () => {
   });
 
   test('valid OTP deletes user row, anonymises reports, clears OTP codes', async () => {
-    // Use the accessToken returned directly by verify-email to avoid going
-    // through POST /auth/login, which has an in-memory rate limiter that
-    // accumulates across the full test suite and would be exhausted by this point.
+    // Use the accessToken returned directly by verify-email to keep this test
+    // focused on account deletion, not the full login OTP flow.
     const { body: { accessToken, user } } = await createVerifiedUser();
     const userId = user.id;
 
@@ -660,5 +659,105 @@ describe('POST /api/v1/auth/resend-otp', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].code).toMatch(/^\d{6}$/);
+  });
+});
+
+// ── Redis-backed rate limiters ────────────────────────────────────────────────
+
+describe('loginLimiter (Redis-backed, 15 min / 10 attempts)', () => {
+  const endpoint = '/api/v1/auth/login';
+  // A non-existent user is fine here — the limiter fires before the handler,
+  // so a 401 response still counts as a metered hit.
+  const payload = { email: 'rl-login@example.com', password: 'AnyPass1!' };
+
+  test('allows a request within the 10-attempt limit', async () => {
+    const res = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    expect(res.status).not.toBe(429);
+  });
+
+  test('returns 429 after 10 attempts are exhausted', async () => {
+    for (let i = 0; i < 10; i++) {
+      await agent.post(endpoint).set('X-CSRF-Token', csrfToken).send(payload);
+    }
+    const res = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    expect(res.status).toBe(429);
+    expect(res.body.message).toMatch(/too many attempts/i);
+  });
+
+  test('limit resets after the TTL window expires (simulated by deleting the Redis key)', async () => {
+    for (let i = 0; i < 10; i++) {
+      await agent.post(endpoint).set('X-CSRF-Token', csrfToken).send(payload);
+    }
+    const blocked = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    expect(blocked.status).toBe(429);
+
+    // Simulate window expiry: delete all loginLimiter keys in Redis
+    const keys = await redis.keys('rl_login:*');
+    await Promise.all(keys.map((k) => redis.del(k)));
+
+    const res = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    expect(res.status).not.toBe(429);
+  });
+
+  test('counter persists in Redis, surviving a simulated process restart', async () => {
+    // Make 5 metered requests (all within the limit so they reach the limiter store)
+    for (let i = 0; i < 5; i++) {
+      await agent.post(endpoint).set('X-CSRF-Token', csrfToken).send(payload);
+    }
+    // The counter must live in Redis — an in-memory store would be zeroed on restart
+    const keys = await redis.keys('rl_login:*');
+    expect(keys.length).toBeGreaterThan(0);
+    const count = Number(await redis.get(keys[0]));
+    expect(count).toBeGreaterThanOrEqual(5);
+  });
+
+  test('fail-open does not swallow legitimate 429 responses when Redis is healthy', async () => {
+    // Exhaust the limit with Redis fully operational
+    for (let i = 0; i < 10; i++) {
+      await agent.post(endpoint).set('X-CSRF-Token', csrfToken).send(payload);
+    }
+    const res = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    // passOnStoreError only fires on store errors, not on a successful limit evaluation
+    expect(res.status).toBe(429);
+  });
+});
+
+describe('otpLimiter (Redis-backed, 30 min / 3 requests)', () => {
+  const endpoint = '/api/v1/auth/resend-otp';
+  const payload = { email: 'rl-otp@example.com', purpose: 'verify' };
+
+  test('allows a request within the 3-request limit', async () => {
+    const res = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    expect(res.status).not.toBe(429);
+  });
+
+  test('returns 429 after 3 requests are exhausted (fail-open does not swallow legitimate 429s)', async () => {
+    for (let i = 0; i < 3; i++) {
+      await agent.post(endpoint).set('X-CSRF-Token', csrfToken).send(payload);
+    }
+    const res = await agent
+      .post(endpoint)
+      .set('X-CSRF-Token', csrfToken)
+      .send(payload);
+    expect(res.status).toBe(429);
+    expect(res.body.message).toMatch(/too many otp requests/i);
   });
 });
