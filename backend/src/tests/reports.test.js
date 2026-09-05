@@ -548,3 +548,51 @@ describe('POST /api/v1/reports/resolve', () => {
     expect(scoreAfter).toBe(scoreBefore + 25);
   });
 });
+
+// ── updateTrustScore — enforced contract and badge_tier atomicity ─────────────
+
+describe('updateTrustScore', () => {
+  const updateTrustScore = require('../routes/reportRoutes')._updateTrustScore;
+
+  test('throws if called with bare pool instead of a transaction client', async () => {
+    // pool lacks a release() method — the contract check uses this to detect bare pool
+    await expect(updateTrustScore(pool, 1, 10)).rejects.toThrow(
+      'updateTrustScore requires a transaction client'
+    );
+  });
+
+  test('report creation updates both trust_score and badge_tier', async () => {
+    const { accessToken, userId } = await createVerifiedUser();
+    await postReport(accessToken);
+
+    const { rows: [{ trust_score, badge_tier }] } = await pool.query(
+      'SELECT trust_score, badge_tier FROM users WHERE id = $1', [userId]
+    );
+
+    expect(trust_score).toBeGreaterThan(0);
+    const expectedTier =
+      trust_score >= 800 ? 'Hero' :
+      trust_score >= 600 ? 'Guardian' :
+      trust_score >= 400 ? 'Trusted' :
+      trust_score >= 200 ? 'Reporter' : 'Newcomer';
+    expect(badge_tier).toBe(expectedTier);
+  });
+
+  test('report resolution updates both trust_score and badge_tier', async () => {
+    const { accessToken, userId } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+    await resolveReport(reportId, accessToken);
+
+    const { rows: [{ trust_score, badge_tier }] } = await pool.query(
+      'SELECT trust_score, badge_tier FROM users WHERE id = $1', [userId]
+    );
+
+    expect(trust_score).toBeGreaterThan(0);
+    const expectedTier =
+      trust_score >= 800 ? 'Hero' :
+      trust_score >= 600 ? 'Guardian' :
+      trust_score >= 400 ? 'Trusted' :
+      trust_score >= 200 ? 'Reporter' : 'Newcomer';
+    expect(badge_tier).toBe(expectedTier);
+  });
+});

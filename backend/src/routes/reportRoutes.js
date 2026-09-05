@@ -110,9 +110,14 @@ async function processAndUploadImage(buffer) {
   return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
 }
 
-// TRUST-1 — Recalculate trust score and badge tier
-async function updateTrustScore(pool, userId, delta) {
-  const result = await pool.query(
+// TRUST-1 — Recalculate trust score and badge tier.
+// Must be called with a transaction client (from pool.connect()), never bare pool,
+// so both writes are atomic with the surrounding operation.
+async function updateTrustScore(client, userId, delta) {
+  if (typeof client.release !== 'function') {
+    throw new Error('updateTrustScore requires a transaction client (pool.connect()), not bare pool');
+  }
+  const result = await client.query(
     `UPDATE users
      SET trust_score = GREATEST(0, LEAST(1000, trust_score + $1))
      WHERE id = $2
@@ -125,7 +130,7 @@ async function updateTrustScore(pool, userId, delta) {
     score >= 600 ? 'Guardian' :
     score >= 400 ? 'Trusted' :
     score >= 200 ? 'Reporter' : 'Newcomer'
-  await pool.query(`UPDATE users SET badge_tier = $1 WHERE id = $2`, [tier, userId])
+  await client.query(`UPDATE users SET badge_tier = $1 WHERE id = $2`, [tier, userId])
   return { score, tier }
 }
 
@@ -294,27 +299,43 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
       }
     }
 
-    const result = await pool.query(
-      `INSERT INTO reports
-        (user_id, hazard_type, severity, description, custom_description, latitude, longitude, location_method, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [userId, clean_hazard_type, severity, clean_description, clean_custom_description,
-       latitude, longitude, location_method || "gps", image_url]
-    );
+    // Wrap the core writes in a transaction: report insert, trust score update,
+    // and location update must all succeed together or all be rolled back.
+    // Notifications and FCM are fire-and-forget and remain outside the transaction.
+    let txClient;
+    let newReport;
+    try {
+      txClient = await pool.connect();
+      await txClient.query('BEGIN');
 
-    const newReport = result.rows[0]
+      const result = await txClient.query(
+        `INSERT INTO reports
+          (user_id, hazard_type, severity, description, custom_description, latitude, longitude, location_method, image_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [userId, clean_hazard_type, severity, clean_description, clean_custom_description,
+         latitude, longitude, location_method || "gps", image_url]
+      );
+      newReport = result.rows[0];
+
+      // TRUST-1 — +10 points for submitting a report
+      await updateTrustScore(txClient, userId, 10);
+
+      // Update reporter's last known location so future FCM broadcasts can radius-filter them
+      await txClient.query(
+        `UPDATE users SET last_lat = $1, last_lng = $2 WHERE id = $3`,
+        [latitude, longitude, userId]
+      );
+
+      await txClient.query('COMMIT');
+    } catch (txErr) {
+      if (txClient) await txClient.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    } finally {
+      if (txClient) txClient.release();
+    }
 
     try { await redis.del('reports:all'); } catch {}
-
-    // TRUST-1 — +10 points for submitting a report
-    await updateTrustScore(pool, userId, 10)
-
-    // Update reporter's last known location so future FCM broadcasts can radius-filter them
-    await pool.query(
-      `UPDATE users SET last_lat = $1, last_lng = $2 WHERE id = $3`,
-      [latitude, longitude, userId]
-    );
 
     const io = req.app.get('io')
     if (io) {
@@ -410,23 +431,39 @@ router.post("/resolve", verifyToken, (req, res, next) => {
       return res.status(err.status || 400).json({ error: err.message })
     }
 
-    await pool.query(
-      `UPDATE reports SET status = 'resolved', resolved_at = NOW() WHERE id = $1`,
-      [report_id]
-    );
+    // Wrap the core writes in a transaction: status update, history record, and
+    // trust score update must all succeed together or all be rolled back.
+    // Notifications and FCM are fire-and-forget and remain outside the transaction.
+    let resolveTxClient;
+    try {
+      resolveTxClient = await pool.connect();
+      await resolveTxClient.query('BEGIN');
 
-    await pool.query(
-      `INSERT INTO report_status_history
-        (report_id, new_status, previous_status, user_role, proof_image_url)
-       VALUES ($1, 'resolved', 'active', 'user', $2)`,
-      [report_id, proof_url]
-    );
-    try { await redis.del('reports:all'); } catch {}
+      await resolveTxClient.query(
+        `UPDATE reports SET status = 'resolved', resolved_at = NOW() WHERE id = $1`,
+        [report_id]
+      );
+      await resolveTxClient.query(
+        `INSERT INTO report_status_history
+          (report_id, new_status, previous_status, user_role, proof_image_url)
+         VALUES ($1, 'resolved', 'active', 'user', $2)`,
+        [report_id, proof_url]
+      );
 
-    // TRUST-1 — +25 points for resolving a report
-    if (report.user_id) {
-      await updateTrustScore(pool, report.user_id, 25)
+      // TRUST-1 — +25 points for resolving a report
+      if (report.user_id) {
+        await updateTrustScore(resolveTxClient, report.user_id, 25);
+      }
+
+      await resolveTxClient.query('COMMIT');
+    } catch (txErr) {
+      if (resolveTxClient) await resolveTxClient.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    } finally {
+      if (resolveTxClient) resolveTxClient.release();
     }
+
+    try { await redis.del('reports:all'); } catch {}
 
     // Notify the original reporter that their report has been resolved.
     // user_id targets only the report owner; other users do not see this notification.
@@ -621,3 +658,5 @@ router.post('/:id/vote', verifyToken, async (req, res, next) => {
 });
 
 module.exports = router;
+// Exported for contract-enforcement testing only — not part of the public API.
+router._updateTrustScore = updateTrustScore;

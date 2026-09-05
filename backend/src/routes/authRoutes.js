@@ -608,6 +608,7 @@ router.delete('/delete-account', verifyToken, async (req, res, next) => {
 
 // ── FORGOT PASSWORD ────────────────────────────────────────────────────────────
 router.post('/forgot-password', async (req, res, next) => {
+  let client;
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email required' });
@@ -619,67 +620,95 @@ router.post('/forgot-password', async (req, res, next) => {
     const token = crypto.randomBytes(32).toString('hex');
     const expires_at = new Date(Date.now() + 15 * 60 * 1000);
 
-    await pool.query(`UPDATE password_reset_tokens SET used = true WHERE email = $1`, [email]);
-    await pool.query(
+    // Invalidating the old token and inserting the new one must be atomic so
+    // a concurrent request cannot slip in between and use either token.
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query(`UPDATE password_reset_tokens SET used = true WHERE email = $1`, [email]);
+    await client.query(
       `INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, $3)`,
       [email, token, expires_at]
     );
+    await client.query('COMMIT');
 
+    // Email is sent after the transaction commits — never inside the transaction.
     const primaryOrigin = (process.env.FRONTEND_URL || '').split(',')[0].trim();
     const resetLink = `${primaryOrigin}/reset-password?token=${token}`;
     await sendResetEmail(email, resetLink);
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     next(err);
+  } finally {
+    if (client) client.release();
   }
 });
 
 // ── RESET PASSWORD ─────────────────────────────────────────────────────────────
 router.post('/reset-password', validate(resetPasswordSchema), async (req, res, next) => {
+  let client;
   try {
     const { token, new_password } = req.body;
 
-    const result = await pool.query(
-      `SELECT * FROM password_reset_tokens WHERE token = $1 AND used = false`,
+    // All DB reads and writes are inside a single transaction. The SELECT uses
+    // FOR UPDATE to lock the token row so a second concurrent request cannot
+    // read the same unused token and race through validation simultaneously.
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `SELECT * FROM password_reset_tokens WHERE token = $1 AND used = false FOR UPDATE`,
       [token]
     );
 
-    if (result.rows.length === 0)
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Invalid or expired reset link.' });
+    }
 
     const record = result.rows[0];
 
-    if (new Date() > new Date(record.expires_at))
+    if (new Date() > new Date(record.expires_at)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Reset link has expired. Request a new one.' });
+    }
 
-    const user = await pool.query('SELECT id FROM users WHERE email = $1', [record.email]);
-    if (user.rows.length === 0)
+    const user = await client.query('SELECT id FROM users WHERE email = $1', [record.email]);
+    if (user.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'User not found.' });
+    }
 
     const userId = user.rows[0].id;
 
-    const history = await pool.query(
+    const history = await client.query(
       `SELECT password_hash FROM password_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`,
       [userId]
     );
 
     for (const row of history.rows) {
       const reused = await bcrypt.compare(new_password, row.password_hash);
-      if (reused)
+      if (reused) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ message: 'You cannot reuse one of your last 5 passwords.' });
+      }
     }
 
     const password_hash = await bcrypt.hash(new_password, 12);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, userId]);
-    await pool.query('INSERT INTO password_history (user_id, password_hash) VALUES ($1, $2)', [userId, password_hash]);
-    await pool.query('UPDATE password_reset_tokens SET used = true WHERE token = $1', [token]);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1', [record.email]);
-    await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
+    await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, userId]);
+    await client.query('INSERT INTO password_history (user_id, password_hash) VALUES ($1, $2)', [userId, password_hash]);
+    await client.query('UPDATE password_reset_tokens SET used = true WHERE token = $1', [token]);
+    await client.query('DELETE FROM otp_codes WHERE email = $1', [record.email]);
+    await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
 
+    await client.query('COMMIT');
     res.json({ message: 'Password reset successful. Please log in.' });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     next(err);
+  } finally {
+    if (client) client.release();
   }
 });
 

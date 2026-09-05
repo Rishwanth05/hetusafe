@@ -761,3 +761,115 @@ describe('otpLimiter (Redis-backed, 30 min / 3 requests)', () => {
     expect(res.body.message).toMatch(/too many otp requests/i);
   });
 });
+
+// ── DB transaction integrity ──────────────────────────────────────────────────
+
+describe('forgot-password transaction integrity', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('rolls back the invalidated token if the INSERT fails mid-transaction', async () => {
+    await createVerifiedUser();
+
+    // Plant a valid token that the handler will try to invalidate before issuing a new one.
+    await pool.query(
+      `INSERT INTO password_reset_tokens (email, token, expires_at)
+       VALUES ($1, 'sentinel-token', NOW() + INTERVAL '15 minutes')`,
+      [USER.email]
+    );
+
+    // The forgot-password handler calls pool.query() (SELECT) before pool.connect()
+    // (transaction). pool.query() internally calls pool.connect(callback), so we
+    // must distinguish the two: pass-through when cb is a function, intercept when
+    // pool.connect() is called explicitly (no callback) to return a wrapped client.
+    const originalConnect = pool.connect.bind(pool);
+    jest.spyOn(pool, 'connect').mockImplementation(function (cb) {
+      if (typeof cb === 'function') {
+        return originalConnect(cb); // pool.query internal call — use original
+      }
+      // Explicit await pool.connect() from the transaction code — inject fault
+      return originalConnect().then((client) => {
+        const orig = client.query.bind(client);
+        jest.spyOn(client, 'query').mockImplementation(function (...args) {
+          const sql = (typeof args[0] === 'string' ? args[0] : (args[0]?.text ?? '')).trim();
+          if (sql.startsWith('INSERT') && sql.includes('password_reset_tokens')) {
+            return Promise.reject(new Error('Forced INSERT failure'));
+          }
+          return orig(...args);
+        });
+        return client;
+      });
+    });
+
+    await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email });
+
+    // Without a transaction, the UPDATE SET used=true would have committed before
+    // the INSERT failed — permanently killing the sentinel token. With ROLLBACK
+    // the UPDATE is undone and the sentinel token remains valid (used = false).
+    const { rows } = await pool.query(
+      `SELECT used FROM password_reset_tokens WHERE token = 'sentinel-token'`
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].used).toBe(false);
+  });
+});
+
+describe('reset-password transaction integrity', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('rolls back all writes if a query fails mid-transaction', async () => {
+    await createVerifiedUser();
+
+    await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email });
+
+    const { rows: [{ token: resetToken }] } = await pool.query(
+      `SELECT token FROM password_reset_tokens WHERE email = $1 AND used = false`,
+      [USER.email]
+    );
+    const { rows: [{ password_hash: originalHash }] } = await pool.query(
+      `SELECT password_hash FROM users WHERE email = $1`,
+      [USER.email]
+    );
+
+    // The reset-password handler uses only pool.connect() (no preceding pool.query),
+    // so mockImplementationOnce is safe here — it intercepts exactly the transaction client.
+    const originalConnect = pool.connect.bind(pool);
+    jest.spyOn(pool, 'connect').mockImplementationOnce(() =>
+      originalConnect().then((client) => {
+        const orig = client.query.bind(client);
+        jest.spyOn(client, 'query').mockImplementation(function (...args) {
+          const sql = (typeof args[0] === 'string' ? args[0] : (args[0]?.text ?? '')).trim();
+          if (sql.startsWith('DELETE') && sql.includes('refresh_tokens')) {
+            return Promise.reject(new Error('Forced DELETE failure'));
+          }
+          return orig(...args);
+        });
+        return client;
+      })
+    );
+
+    await agent
+      .post('/api/v1/auth/reset-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ token: resetToken, new_password: 'NewValidPass2!' });
+
+    // Token must still be unused — UPDATE SET used=true was rolled back.
+    const { rows: tokenRows } = await pool.query(
+      `SELECT used FROM password_reset_tokens WHERE token = $1`,
+      [resetToken]
+    );
+    expect(tokenRows[0].used).toBe(false);
+
+    // Password must be unchanged — UPDATE users SET password_hash was rolled back.
+    const { rows: [{ password_hash: currentHash }] } = await pool.query(
+      `SELECT password_hash FROM users WHERE email = $1`,
+      [USER.email]
+    );
+    expect(currentHash).toBe(originalHash);
+  });
+});

@@ -218,6 +218,74 @@ describe('DELETE /api/v1/admin/users/:id', () => {
   });
 });
 
+// ── DELETE /admin/users/:id — self-delete guard ────────────────────────────────
+
+describe('DELETE /api/v1/admin/users/:id — self-delete guard', () => {
+  test('returns 403 when an admin tries to delete their own account', async () => {
+    const { token: adminToken, userId: adminId } = await createAdmin();
+
+    const res = await agent
+      .delete(`/api/v1/admin/users/${adminId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/cannot delete your own/i);
+
+    // Account must be untouched
+    const { rows } = await pool.query('SELECT id FROM users WHERE id = $1', [adminId]);
+    expect(rows).toHaveLength(1);
+  });
+});
+
+// ── DELETE /admin/users/:id — transaction rollback ─────────────────────────────
+
+describe('DELETE /api/v1/admin/users/:id — transaction rollback', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('rolls back user deletion and report anonymization if audit-log insert fails', async () => {
+    const { token: adminToken } = await createAdmin();
+    const { userId: targetId } = await createUser({ email: 'rollback-victim@admin-test.com' });
+    const reportId = await insertReport(targetId);
+
+    // The handler calls pool.connect() directly with no preceding pool.query(),
+    // so mockImplementationOnce is safe — it intercepts exactly the transaction client.
+    const originalConnect = pool.connect.bind(pool);
+    jest.spyOn(pool, 'connect').mockImplementationOnce(() =>
+      originalConnect().then((client) => {
+        const orig = client.query.bind(client);
+        jest.spyOn(client, 'query').mockImplementation(function (...args) {
+          const sql = (typeof args[0] === 'string' ? args[0] : (args[0]?.text ?? '')).trim();
+          if (sql.startsWith('INSERT') && sql.includes('admin_audit_log')) {
+            return Promise.reject(new Error('Forced audit-log failure'));
+          }
+          return orig(...args);
+        });
+        return client;
+      })
+    );
+
+    const res = await agent
+      .delete(`/api/v1/admin/users/${targetId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).not.toBe(200);
+
+    // User must NOT have been deleted (all three writes were rolled back together)
+    const { rows: users } = await pool.query(
+      'SELECT id FROM users WHERE id = $1', [targetId]
+    );
+    expect(users).toHaveLength(1);
+
+    // Report must NOT have been anonymized (rolled back with the rest)
+    const { rows: reports } = await pool.query(
+      'SELECT user_id FROM reports WHERE id = $1', [reportId]
+    );
+    expect(reports[0].user_id).toBe(targetId);
+  });
+});
+
 // ── PUT /admin/users/:id/role ─────────────────────────────────────────────────
 
 describe('PUT /api/v1/admin/users/:id/role', () => {

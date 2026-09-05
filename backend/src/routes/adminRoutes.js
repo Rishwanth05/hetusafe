@@ -93,18 +93,37 @@ router.get('/users', async (req, res, next) => {
 
 // ── DELETE USER ────────────────────────────────────────────────────────────────
 router.delete('/users/:id', async (req, res, next) => {
+  // Server-side self-delete guard — frontend validation alone is not sufficient.
+  if (String(req.params.id) === String(req.user.id)) {
+    return res.status(403).json({ message: 'Cannot delete your own admin account.' });
+  }
+
+  let client;
   try {
-    const target = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [req.params.id]);
-    await pool.query('UPDATE reports SET user_id = NULL WHERE user_id = $1', [req.params.id]);
-    await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
-    await pool.query(
+    // All three writes are wrapped in a single transaction: if the audit-log
+    // insert fails, the user deletion and report anonymization are rolled back.
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const target = await client.query(
+      'SELECT id, name, email, role FROM users WHERE id = $1',
+      [req.params.id]
+    );
+    await client.query('UPDATE reports SET user_id = NULL WHERE user_id = $1', [req.params.id]);
+    await client.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    await client.query(
       `INSERT INTO admin_audit_log (admin_id, admin_email, action, target_type, target_id, old_value)
        VALUES ($1, $2, 'delete_user', 'user', $3, $4)`,
       [req.user.id, req.user.email, req.params.id, JSON.stringify(target.rows[0] || {})]
     );
+
+    await client.query('COMMIT');
     res.json({ message: 'User deleted ✅' });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     next(err);
+  } finally {
+    if (client) client.release();
   }
 });
 
