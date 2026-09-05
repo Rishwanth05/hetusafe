@@ -339,7 +339,12 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
 
     const io = req.app.get('io')
     if (io) {
-      io.emit('new-report', { ...newReport, name: req.body.reporter_name || 'Anonymous' })
+      io.emit('new-report', {
+        id:          newReport.id,
+        hazard_type: newReport.hazard_type,
+        severity:    newReport.severity,
+        status:      newReport.status,
+      })
     }
 
     // Persist notification to DB so bell icon picks it up via polling
