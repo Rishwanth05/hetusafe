@@ -8,6 +8,7 @@ const { generateOTP, sendOTPEmail, sendResetEmail } = require('../utils/email');
 const { verifyToken } = require('../middleware/auth');
 const redis = require('../config/redis');
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 
@@ -63,13 +64,29 @@ const emergencyContactsSchema = z.object({
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { message: 'Too many attempts. Try again in 15 minutes.' },
+  // passOnStoreError: fail-open if Redis is briefly unreachable (logs the error, allows the request)
+  passOnStoreError: true,
+  store: new RedisStore({
+    sendCommand: (...args) => redis.call(...args),
+    prefix: 'rl_login:',
+  }),
 });
 
 const otpLimiter = rateLimit({
   windowMs: 30 * 60 * 1000,
   max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { message: 'Too many OTP requests. Try again in 30 minutes.' },
+  // passOnStoreError: fail-open if Redis is briefly unreachable (logs the error, allows the request)
+  passOnStoreError: true,
+  store: new RedisStore({
+    sendCommand: (...args) => redis.call(...args),
+    prefix: 'rl_otp:',
+  }),
 });
 
 // ── Helper: issue token pair ───────────────────────────────────────────────────
