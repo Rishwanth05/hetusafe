@@ -977,3 +977,80 @@ describe('reset-password transaction integrity', () => {
     expect(currentHash).toBe(originalHash);
   });
 });
+
+// ── PUT /update-name ──────────────────────────────────────────────────────────
+
+describe('PUT /api/v1/auth/update-name', () => {
+  test('normal name update succeeds (regression guard)', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    const res = await agent
+      .put('/api/v1/auth/update-name')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ name: 'Updated Name' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.name).toBe('Updated Name');
+  });
+
+  test('name at exactly 100 characters is accepted', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+    const name100 = 'A'.repeat(100);
+
+    const res = await agent
+      .put('/api/v1/auth/update-name')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ name: name100 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.name).toBe(name100);
+  });
+
+  test('name at 101 characters is rejected with 400', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    const res = await agent
+      .put('/api/v1/auth/update-name')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ name: 'A'.repeat(101) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/100 characters/i);
+  });
+
+  test('empty name is rejected with 400', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    const res = await agent
+      .put('/api/v1/auth/update-name')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ name: '' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('whitespace-only name is rejected with 400', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    const res = await agent
+      .put('/api/v1/auth/update-name')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ name: '   ' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('unauthenticated request returns 401', async () => {
+    const res = await agent
+      .put('/api/v1/auth/update-name')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ name: 'Test' });
+
+    expect(res.status).toBe(401);
+  });
+});

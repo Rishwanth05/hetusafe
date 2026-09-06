@@ -51,6 +51,9 @@ const changePasswordSchema = z.object({
   old_password: z.string().min(1, 'Current password is required'),
   new_password: passwordField,
 });
+const updateNameSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
+});
 const emergencyContactItemSchema = z.object({
   name: z.string().min(1, 'Contact name is required').max(100, 'Name must be 100 characters or less'),
   phone: z.string().min(1, 'Phone number is required').max(30, 'Phone number too long'),
@@ -471,13 +474,10 @@ router.get('/my-reports', verifyToken, async (req, res, next) => {
 });
 
 // ── UPDATE NAME ────────────────────────────────────────────────────────────────
-router.put('/update-name', verifyToken, async (req, res, next) => {
+router.put('/update-name', verifyToken, validate(updateNameSchema), async (req, res, next) => {
   try {
-    const { name } = req.body;
-    if (!name || !name.trim())
-      return res.status(400).json({ message: 'Name is required' });
-
-    const clean_name = xss(name.trim());
+    const { name } = req.body; // trimmed and length-validated by Zod
+    const clean_name = xss(name);
 
     const result = await pool.query(
       'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, role',

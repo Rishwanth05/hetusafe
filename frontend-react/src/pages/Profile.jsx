@@ -100,7 +100,7 @@ export default function Profile() {
       setNameMsg('✅ Name updated!')
       setEditingName(false)
     } catch (err) {
-      setNameMsg('❌ ' + (err.response?.data?.message || 'Failed'))
+      setNameMsg('❌ ' + (err.response?.data?.error || err.response?.data?.message || 'Failed'))
     } finally {
       setNameLoading(false)
     }
