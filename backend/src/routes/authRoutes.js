@@ -503,6 +503,21 @@ router.put('/change-password', verifyToken, validate(changePasswordSchema), asyn
     const password_hash = await bcrypt.hash(new_password, 12);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, req.user.id]);
     await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [req.user.id]);
+
+    // Blacklist the access token that was used for this request so it cannot
+    // be reused for the remainder of its lifetime (max 15 min).
+    // Fail-open: if Redis is unavailable the password change still succeeds;
+    // the token expires naturally within its configured lifetime.
+    const token = req.headers.authorization.split(' ')[1];
+    const remainingTtl = req.user.exp - Math.floor(Date.now() / 1000);
+    if (remainingTtl > 0) {
+      try {
+        await redis.set(`blacklist:${token}`, '1', 'EX', remainingTtl);
+      } catch (err) {
+        console.error('Token blacklist write failed after password change:', err.message);
+      }
+    }
+
     res.json({ message: 'Password changed ✅' });
   } catch (err) {
     next(err);
