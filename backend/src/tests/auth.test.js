@@ -433,6 +433,62 @@ describe('POST /api/v1/auth/forgot-password', () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/if that email exists/i);
   });
+
+  test('malformed email (no @) is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'notanemail' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  test('malformed email (random digits) is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'asdf1234' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  test('empty email field is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: '' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('missing email field is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  test('anti-enumeration: registered and unregistered valid emails return identical responses', async () => {
+    await createVerifiedUser();
+
+    const registered = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email });
+
+    const unregistered = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'not.registered@example.com' });
+
+    expect(registered.status).toBe(200);
+    expect(unregistered.status).toBe(200);
+    expect(registered.body.message).toBe(unregistered.body.message);
+  });
 });
 
 describe('POST /api/v1/auth/reset-password', () => {
