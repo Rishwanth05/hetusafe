@@ -174,6 +174,50 @@ describe('GET /api/v1/admin/users', () => {
     expect(res.body.users).toHaveLength(1);
     expect(res.body.users[0].name).toBe('Findable Person');
   });
+
+  test('total reflects filtered count, not full user count, when search is active', async () => {
+    const { token } = await createAdmin();
+    await createUser({ name: 'Alpha User', email: 'alpha@admin-test.com' });
+    await createUser({ name: 'Beta User',  email: 'beta@admin-test.com' });
+    await createUser({ name: 'Gamma User', email: 'gamma@admin-test.com' });
+
+    // search matches only the two "alpha" rows — admin + "Alpha User"
+    // (admin email contains no "alpha", name contains no "alpha")
+    // Actually admin name is 'Admin User' from createAdmin. Only 'Alpha User' matches.
+    const res = await agent
+      .get('/api/v1/admin/users?search=Alpha')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.users).toHaveLength(1);
+    expect(res.body.total).toBe(1); // must not be 4 (the full user count)
+  });
+
+  test('no search term: total reflects the full user count', async () => {
+    const { token } = await createAdmin();
+    await createUser({ email: 'u1@admin-test.com' });
+    await createUser({ email: 'u2@admin-test.com' });
+
+    const res = await agent
+      .get('/api/v1/admin/users')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(3); // admin + 2 users
+  });
+
+  test('search matching zero users returns total: 0', async () => {
+    const { token } = await createAdmin();
+    await createUser({ email: 'someone@admin-test.com' });
+
+    const res = await agent
+      .get('/api/v1/admin/users?search=zzznomatch')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.users).toHaveLength(0);
+    expect(res.body.total).toBe(0);
+  });
 });
 
 // ── DELETE /admin/users/:id ───────────────────────────────────────────────────
