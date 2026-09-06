@@ -549,6 +549,89 @@ describe('POST /api/v1/reports/resolve', () => {
   });
 });
 
+// ── GET /trust/:userId — auth gate ───────────────────────────────────────────
+
+describe('GET /api/v1/reports/trust/:userId', () => {
+  test('unauthenticated request returns 401', async () => {
+    const res = await agent.get('/api/v1/reports/trust/1')
+    expect(res.status).toBe(401)
+  })
+
+  test('authenticated request returns trust_score and badge_tier for a valid user', async () => {
+    const { accessToken, userId } = await createVerifiedUser()
+
+    const res = await agent
+      .get(`/api/v1/reports/trust/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+
+    expect(res.status).toBe(200)
+    expect(typeof res.body.trust_score).toBe('number')
+    expect(typeof res.body.badge_tier).toBe('string')
+  })
+
+  test('authenticated request for non-existent user returns 404', async () => {
+    const { accessToken } = await createVerifiedUser()
+
+    const res = await agent
+      .get('/api/v1/reports/trust/99999')
+      .set('Authorization', `Bearer ${accessToken}`)
+
+    expect(res.status).toBe(404)
+  })
+})
+
+// ── POST /check-duplicate — auth gate ────────────────────────────────────────
+
+describe('POST /api/v1/reports/check-duplicate', () => {
+  const DUPLICATE_PAYLOAD = {
+    latitude: 12.9716,
+    longitude: 77.5946,
+    hazard_type: 'Pothole',
+  }
+
+  test('unauthenticated request returns 401', async () => {
+    const res = await agent
+      .post('/api/v1/reports/check-duplicate')
+      .set('X-CSRF-Token', csrfToken)
+      .send(DUPLICATE_PAYLOAD)
+    expect(res.status).toBe(401)
+  })
+
+  test('authenticated request with no nearby reports returns isDuplicate: false', async () => {
+    const { accessToken } = await createVerifiedUser()
+
+    const res = await agent
+      .post('/api/v1/reports/check-duplicate')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send(DUPLICATE_PAYLOAD)
+
+    expect(res.status).toBe(200)
+    expect(res.body.isDuplicate).toBe(false)
+  })
+
+  test('authenticated request returns isDuplicate: true when a nearby same-category report exists', async () => {
+    const { accessToken, userId } = await createVerifiedUser()
+
+    await pool.query(
+      `INSERT INTO reports (user_id, hazard_type, severity, description, latitude, longitude, location_method)
+       VALUES ($1, $2, 'medium', 'Existing report', $3, $4, 'gps')`,
+      [userId, DUPLICATE_PAYLOAD.hazard_type, DUPLICATE_PAYLOAD.latitude, DUPLICATE_PAYLOAD.longitude]
+    )
+
+    const res = await agent
+      .post('/api/v1/reports/check-duplicate')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send(DUPLICATE_PAYLOAD)
+
+    expect(res.status).toBe(200)
+    expect(res.body.isDuplicate).toBe(true)
+    expect(res.body.existing).toBeDefined()
+    expect(res.body.existing.hazard_type).toBe(DUPLICATE_PAYLOAD.hazard_type)
+  })
+})
+
 // ── updateTrustScore — enforced contract and badge_tier atomicity ─────────────
 
 describe('updateTrustScore', () => {
