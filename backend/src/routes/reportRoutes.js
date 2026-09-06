@@ -153,12 +153,62 @@ async function dailyReportLimit(req, res, next) {
   }
 }
 
+const ALL_REPORTS_DEFAULT_LIMIT = 100;
+const ALL_REPORTS_MAX_LIMIT     = 200;
+
 router.get("/all", verifyToken, async (req, res, next) => {
   try {
-    try {
-      const cached = await getCache('reports:all');
-      if (cached) return res.json(cached);
-    } catch {}
+    // Parse + cap limit
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = (!rawLimit || rawLimit < 1)
+      ? ALL_REPORTS_DEFAULT_LIMIT
+      : Math.min(rawLimit, ALL_REPORTS_MAX_LIMIT);
+
+    // Decode opaque cursor → { created_at, id }
+    let cursorTime = null;
+    let cursorId   = null;
+    if (req.query.cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(req.query.cursor, 'base64url').toString());
+        if (!decoded.t || !Number.isInteger(decoded.i)) throw new Error('malformed');
+        cursorTime = decoded.t;
+        cursorId   = decoded.i;
+      } catch {
+        return res.status(400).json({ error: 'Invalid cursor' });
+      }
+    }
+
+    const isFirstPage = !cursorTime;
+
+    // Single-flight cache for first page only
+    if (isFirstPage) {
+      try {
+        const cached = await getCache('reports:all');
+        if (cached) return res.json(cached);
+      } catch {}
+
+      try {
+        const lock = await redis.set('lock:reports:all', '1', 'NX', 'EX', 10);
+        if (!lock) {
+          // Another request is rebuilding — poll the cache for up to 2 s
+          for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              const polled = await getCache('reports:all');
+              if (polled) return res.json(polled);
+            } catch {}
+          }
+          // Safety valve: fall through and hit the DB ourselves
+        }
+      } catch {}
+    }
+
+    const params = [limit + 1]; // fetch one extra to detect next page
+    let cursorClause = '';
+    if (cursorTime && cursorId !== null) {
+      params.push(cursorTime, cursorId);
+      cursorClause = `AND (r.created_at, r.id) < ($${params.length - 1}::timestamptz, $${params.length}::int)`;
+    }
 
     const result = await pool.query(`
       SELECT r.*, u.name, u.trust_score, u.badge_tier,
@@ -185,15 +235,33 @@ router.get("/all", verifyToken, async (req, res, next) => {
           AND r.resolved_at < NOW() - INTERVAL '24 hours'
           AND v.net > 0
         )
-      ORDER BY r.created_at DESC
-    `);
+        ${cursorClause}
+      ORDER BY r.created_at DESC, r.id DESC
+      LIMIT $1
+    `, params);
 
-    try {
-      await setCache('reports:all', result.rows, 30);
-    } catch {}
+    const rows = result.rows;
+    let nextCursor = null;
+    if (rows.length > limit) {
+      rows.pop(); // discard the sentinel row
+      const last = rows[rows.length - 1];
+      nextCursor = Buffer.from(
+        JSON.stringify({ t: last.created_at, i: last.id })
+      ).toString('base64url');
+    }
 
-    res.json(result.rows);
+    const payload = { reports: rows, nextCursor };
+
+    if (isFirstPage) {
+      try {
+        await setCache('reports:all', payload, 30);
+      } catch {}
+      try { await redis.del('lock:reports:all'); } catch {}
+    }
+
+    res.json(payload);
   } catch (err) {
+    try { await redis.del('lock:reports:all'); } catch {}
     next(err);
   }
 });

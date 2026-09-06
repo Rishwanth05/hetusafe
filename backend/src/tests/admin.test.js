@@ -528,7 +528,7 @@ describe('POST /api/v1/admin/reports/:id/archive', () => {
       .get('/api/v1/reports/all')
       .set('Authorization', `Bearer ${adminToken}`);
     expect(feedRes.status).toBe(200);
-    const ids = feedRes.body.map(r => r.id);
+    const ids = feedRes.body.reports.map(r => r.id);
     expect(ids).not.toContain(reportId);
   });
 
@@ -608,7 +608,7 @@ describe('POST /api/v1/admin/reports/:id/unarchive', () => {
       .get('/api/v1/reports/all')
       .set('Authorization', `Bearer ${adminToken}`);
     expect(feedRes.status).toBe(200);
-    const ids = feedRes.body.map(r => r.id);
+    const ids = feedRes.body.reports.map(r => r.id);
     expect(ids).toContain(reportId);
   });
 

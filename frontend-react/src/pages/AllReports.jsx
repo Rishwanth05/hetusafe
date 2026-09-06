@@ -375,10 +375,35 @@ export default function AllReports() {
   const appliedAuto = useRef(false)
 
   useEffect(() => {
-    client.get('/reports/all')
-      .then(({ data }) => { setReports(data); setFiltered(data) })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    let cancelled = false
+    async function fetchAll() {
+      try {
+        let all = []
+        let cursor = null
+        let page = 0
+        const MAX_PAGES = 200
+        do {
+          const params = {}
+          if (cursor) params.cursor = cursor
+          const { data } = await client.get('/reports/all', { params })
+          if (cancelled) return
+          all = all.concat(data.reports)
+          cursor = data.nextCursor
+          page++
+        } while (cursor && page < MAX_PAGES)
+        if (page >= MAX_PAGES && cursor) {
+          console.warn('[reports/all] fetch stopped after', MAX_PAGES, 'pages — possible cursor loop')
+        }
+        setReports(all)
+        setFiltered(all)
+      } catch (err) {
+        console.error(err)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchAll()
+    return () => { cancelled = true }
   }, [])
 
   // Apply auto-detected location as the default area filter.
@@ -435,9 +460,26 @@ export default function AllReports() {
     setReports(prev => prev.map(r =>
       r.id === reportId ? { ...r, status: 'resolved', proof_url: proofUrl } : r
     ))
-    client.get('/reports/all')
-      .then(res => setReports(res.data))
-      .catch(() => {})
+    ;(async () => {
+      try {
+        let all = []
+        let cursor = null
+        let page = 0
+        const MAX_PAGES = 200
+        do {
+          const params = {}
+          if (cursor) params.cursor = cursor
+          const { data } = await client.get('/reports/all', { params })
+          all = all.concat(data.reports)
+          cursor = data.nextCursor
+          page++
+        } while (cursor && page < MAX_PAGES)
+        if (page >= MAX_PAGES && cursor) {
+          console.warn('[reports/all] fetch stopped after', MAX_PAGES, 'pages — possible cursor loop')
+        }
+        setReports(all)
+      } catch {}
+    })()
   }
 
   const uniqueHazards = [...new Set(reports.map(r => r.hazard_type))]
