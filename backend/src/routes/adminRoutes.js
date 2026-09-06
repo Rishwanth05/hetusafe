@@ -66,24 +66,30 @@ router.get('/users', async (req, res, next) => {
     const { search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = `
+    const params = [];
+    const conditions = [];
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await pool.query(`
       SELECT u.id, u.name, u.email, u.role, u.is_verified, u.created_at,
              COUNT(r.id)::int AS report_count
       FROM users u
       LEFT JOIN reports r ON r.user_id = u.id
-    `;
-    const params = [];
+      ${where}
+      GROUP BY u.id ORDER BY u.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, [...params, limit, offset]);
 
-    if (search) {
-      query += ` WHERE u.name ILIKE $1 OR u.email ILIKE $1`;
-      params.push(`%${search}%`);
-    }
-
-    query += ` GROUP BY u.id ORDER BY u.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const result = await pool.query(query, params);
-    const total = await pool.query('SELECT COUNT(*) FROM users');
+    const total = await pool.query(
+      `SELECT COUNT(*) FROM users u ${where}`,
+      params
+    );
 
     res.json({ users: result.rows, total: parseInt(total.rows[0].count) });
   } catch (err) {
