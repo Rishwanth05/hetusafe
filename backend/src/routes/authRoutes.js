@@ -54,6 +54,9 @@ const changePasswordSchema = z.object({
 const updateNameSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
 });
+const forgotPasswordSchema = z.object({
+  email: emailField,
+});
 const emergencyContactItemSchema = z.object({
   name: z.string().min(1, 'Contact name is required').max(100, 'Name must be 100 characters or less'),
   phone: z.string().min(1, 'Phone number is required').max(30, 'Phone number too long'),
@@ -622,11 +625,10 @@ router.delete('/delete-account', verifyToken, async (req, res, next) => {
 });
 
 // ── FORGOT PASSWORD ────────────────────────────────────────────────────────────
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res, next) => {
   let client;
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email required' });
 
     const result = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0)
