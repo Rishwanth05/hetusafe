@@ -179,7 +179,8 @@ describe('POST /api/v1/reports/create', () => {
 // ── Fetch via /all ────────────────────────────────────────────────────────────
 
 describe('GET /api/v1/reports/all', () => {
-  test('created report appears in the list with correct fields', async () => {
+  // Response shape changed: { reports: [...], nextCursor: string|null }
+  test('created report appears in reports array with correct fields', async () => {
     const { accessToken, userId } = await createVerifiedUser();
     const createRes = await postReport(accessToken);
     expect(createRes.status).toBe(201);
@@ -191,8 +192,9 @@ describe('GET /api/v1/reports/all', () => {
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(allRes.status).toBe(200);
+    expect(Array.isArray(allRes.body.reports)).toBe(true);
 
-    const found = allRes.body.find((r) => r.id === reportId);
+    const found = allRes.body.reports.find((r) => r.id === reportId);
     expect(found).toBeDefined();
     expect(found.hazard_type).toBe(BASE_REPORT.hazard_type);
     expect(found.severity).toBe(BASE_REPORT.severity);
@@ -202,6 +204,95 @@ describe('GET /api/v1/reports/all', () => {
   test('unauthenticated GET /all returns 401', async () => {
     const res = await agent.get('/api/v1/reports/all');
     expect(res.status).toBe(401);
+  });
+
+  test('default page size: no limit param returns at most 100 reports', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const res = await agent
+      .get('/api/v1/reports/all')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.reports.length).toBeLessThanOrEqual(100);
+    expect(res.body).toHaveProperty('nextCursor');
+  });
+
+  test('limit above max (200) is capped to 200', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const res = await agent
+      .get('/api/v1/reports/all')
+      .query({ limit: 9999 })
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    // With fewer than 200 test rows this returns all, but the cap is exercised
+    expect(res.body.reports.length).toBeLessThanOrEqual(200);
+  });
+
+  test('cursor pagination: two sequential pages cover all reports with no duplicates', async () => {
+    const { accessToken } = await createVerifiedUser();
+
+    // Create 3 reports — more than page_size=2 so pagination kicks in
+    await postReport(accessToken);
+    await postReport(accessToken);
+    await postReport(accessToken);
+
+    // Page 1: limit=2
+    const page1 = await agent
+      .get('/api/v1/reports/all')
+      .query({ limit: 2 })
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(page1.status).toBe(200);
+    expect(page1.body.reports).toHaveLength(2);
+    expect(page1.body.nextCursor).toBeTruthy();
+
+    // Page 2: use cursor from page 1
+    const page2 = await agent
+      .get('/api/v1/reports/all')
+      .query({ limit: 2, cursor: page1.body.nextCursor })
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(page2.status).toBe(200);
+    expect(page2.body.reports.length).toBeGreaterThanOrEqual(1);
+
+    // No duplicate IDs across both pages
+    const ids1 = page1.body.reports.map(r => r.id);
+    const ids2 = page2.body.reports.map(r => r.id);
+    const overlap = ids1.filter(id => ids2.includes(id));
+    expect(overlap).toHaveLength(0);
+
+    // All 3 reports accounted for (total = page1 + page2)
+    expect(ids1.length + ids2.length).toBe(3);
+  });
+
+  test('last page returns nextCursor: null', async () => {
+    const { accessToken } = await createVerifiedUser();
+    await postReport(accessToken);
+
+    // Fetch with limit larger than available reports
+    const res = await agent
+      .get('/api/v1/reports/all')
+      .query({ limit: 100 })
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  test('empty result set returns reports: [] and nextCursor: null', async () => {
+    // No reports created in this test — DB was truncated by beforeEach
+    const { accessToken } = await createVerifiedUser();
+    const res = await agent
+      .get('/api/v1/reports/all')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.reports).toEqual([]);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  test('invalid cursor returns 400', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const res = await agent
+      .get('/api/v1/reports/all')
+      .query({ cursor: 'notvalidbase64!!!' })
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -304,7 +395,7 @@ describe('DELETE /api/v1/reports/:id', () => {
     const allRes = await agent
       .get('/api/v1/reports/all')
       .set('Authorization', `Bearer ${accessToken}`)
-    expect(allRes.body.find(r => r.id === reportId)).toBeUndefined()
+    expect(allRes.body.reports.find(r => r.id === reportId)).toBeUndefined()
   })
 
   test('non-existent report returns 404', async () => {

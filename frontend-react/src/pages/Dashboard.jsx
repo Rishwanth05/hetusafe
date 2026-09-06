@@ -40,7 +40,7 @@ export default function Dashboard() {
   useEffect(() => {
     client.get('/reports/all')
       .then(({ data }) => {
-        const sorted = [...data].sort((a, b) =>
+        const sorted = [...data.reports].sort((a, b) =>
           (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4)
         )
         setReports(sorted)
