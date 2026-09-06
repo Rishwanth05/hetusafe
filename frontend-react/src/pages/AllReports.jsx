@@ -380,6 +380,8 @@ export default function AllReports() {
       try {
         let all = []
         let cursor = null
+        let page = 0
+        const MAX_PAGES = 200
         do {
           const params = {}
           if (cursor) params.cursor = cursor
@@ -387,7 +389,11 @@ export default function AllReports() {
           if (cancelled) return
           all = all.concat(data.reports)
           cursor = data.nextCursor
-        } while (cursor)
+          page++
+        } while (cursor && page < MAX_PAGES)
+        if (page >= MAX_PAGES && cursor) {
+          console.warn('[reports/all] fetch stopped after', MAX_PAGES, 'pages — possible cursor loop')
+        }
         setReports(all)
         setFiltered(all)
       } catch (err) {
@@ -458,13 +464,19 @@ export default function AllReports() {
       try {
         let all = []
         let cursor = null
+        let page = 0
+        const MAX_PAGES = 200
         do {
           const params = {}
           if (cursor) params.cursor = cursor
           const { data } = await client.get('/reports/all', { params })
           all = all.concat(data.reports)
           cursor = data.nextCursor
-        } while (cursor)
+          page++
+        } while (cursor && page < MAX_PAGES)
+        if (page >= MAX_PAGES && cursor) {
+          console.warn('[reports/all] fetch stopped after', MAX_PAGES, 'pages — possible cursor loop')
+        }
         setReports(all)
       } catch {}
     })()
