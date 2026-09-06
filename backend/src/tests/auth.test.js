@@ -586,6 +586,110 @@ describe('PUT /api/v1/auth/change-password', () => {
 
     expect(res.status).toBe(401);
   });
+
+  // ── Access-token blacklist on password change ─────────────────────────────
+
+  test('access token used to change password is rejected on subsequent requests', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    const changeRes = await agent
+      .put('/api/v1/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ old_password: USER.password, new_password: 'NewValidPass2!' });
+    expect(changeRes.status).toBe(200);
+
+    // The same token that was used to change the password must now be blacklisted
+    const meRes = await agent
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(meRes.status).toBe(401);
+  });
+
+  test('fresh access token obtained after password change continues to work', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    await agent
+      .put('/api/v1/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ old_password: USER.password, new_password: 'NewValidPass2!' });
+
+    // Log in with the new password to get a fresh token pair
+    const { accessToken: newToken } = await loginUser(USER.email, 'NewValidPass2!');
+    expect(newToken).toBeTruthy();
+
+    // The new token must be accepted
+    const meRes = await agent
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${newToken}`);
+    expect(meRes.status).toBe(200);
+  });
+
+  test('user who has not changed their password is completely unaffected', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    // Make a normal authenticated request — no password change involved
+    const meRes = await agent
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.email).toBe(USER.email);
+  });
+
+  test('multiple concurrent requests with the old token all get 401 after change', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    await agent
+      .put('/api/v1/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ old_password: USER.password, new_password: 'NewValidPass2!' });
+
+    // Fire several concurrent requests with the now-blacklisted token
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        agent.get('/api/v1/auth/me').set('Authorization', `Bearer ${accessToken}`)
+      )
+    );
+
+    // Every one must be rejected — no race-condition window where some slip through
+    results.forEach(r => expect(r.status).toBe(401));
+  });
+
+  test('full flow: login → use token → change password → old token rejected → refresh rejected → must re-login', async () => {
+    // Step 1: create account and get initial tokens
+    const { body: { accessToken: firstToken, refreshToken } } = await createVerifiedUser();
+
+    // Step 2: confirm initial token works
+    const step2 = await agent.get('/api/v1/auth/me').set('Authorization', `Bearer ${firstToken}`);
+    expect(step2.status).toBe(200);
+
+    // Step 3: change password — uses firstToken, should blacklist it
+    await agent
+      .put('/api/v1/auth/change-password')
+      .set('Authorization', `Bearer ${firstToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ old_password: USER.password, new_password: 'NewValidPass2!' });
+
+    // Step 4: old access token is now rejected
+    const step4 = await agent.get('/api/v1/auth/me').set('Authorization', `Bearer ${firstToken}`);
+    expect(step4.status).toBe(401);
+
+    // Step 5: refresh token is also rejected (refresh tokens were deleted)
+    const step5 = await agent
+      .post('/api/v1/auth/refresh')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ refreshToken });
+    expect(step5.status).toBe(401);
+
+    // Step 6: user must re-login with the new password
+    const { accessToken: freshToken } = await loginUser(USER.email, 'NewValidPass2!');
+    expect(freshToken).toBeTruthy();
+
+    const step6 = await agent.get('/api/v1/auth/me').set('Authorization', `Bearer ${freshToken}`);
+    expect(step6.status).toBe(200);
+  });
 });
 
 describe('POST /api/v1/auth/reset-password (session revocation)', () => {
