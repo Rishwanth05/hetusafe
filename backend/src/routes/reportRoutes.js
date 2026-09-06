@@ -247,7 +247,7 @@ router.get('/nearby', verifyToken, async (req, res, next) => {
 });
 
 // TRUST-1 — Get user trust score
-router.get('/trust/:userId', async (req, res, next) => {
+router.get('/trust/:userId', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT trust_score, badge_tier FROM users WHERE id = $1`,
@@ -510,7 +510,7 @@ router.post("/resolve", verifyToken, (req, res, next) => {
 });
 
 // DUP1 — Duplicate detection: check 50m radius + same category + 24hr window
-router.post("/check-duplicate", validate(checkDuplicateSchema), async (req, res, next) => {
+router.post("/check-duplicate", verifyToken, validate(checkDuplicateSchema), async (req, res, next) => {
   try {
     const { latitude, longitude, hazard_type } = req.body
 
