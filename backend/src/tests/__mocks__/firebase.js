@@ -2,5 +2,6 @@
 
 // Prevents firebase-admin from attempting any network calls during tests.
 const sendPushNotification = jest.fn().mockResolvedValue(undefined);
+const sendPushNotificationBatch = jest.fn().mockResolvedValue(undefined);
 
-module.exports = { sendPushNotification };
+module.exports = { sendPushNotification, sendPushNotificationBatch };

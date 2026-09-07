@@ -363,6 +363,79 @@ describe('POST /api/v1/reports/:id/vote', () => {
   });
 });
 
+// ── GET vote counts ───────────────────────────────────────────────────────────
+
+describe('GET /api/v1/reports/:id/votes', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('returns zero counts and null userVote when no votes exist', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+
+    const res = await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ confirmed: 0, disputed: 0, userVote: null });
+  });
+
+  test("returns correct counts and caller's vote after voting", async () => {
+    const { accessToken } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+
+    await agent
+      .post(`/api/v1/reports/${reportId}/vote`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ vote: 'confirmed' });
+
+    const res = await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ confirmed: 1, disputed: 0, userVote: 'confirmed' });
+  });
+
+  test('userVote is null for a user who has not voted when others have', async () => {
+    const VIEWER = { name: 'Viewer', email: 'viewer@example.com', password: 'ValidPass1!' };
+    const { accessToken: voterToken } = await createVerifiedUser();
+    const { accessToken: viewerToken } = await createVerifiedUser(VIEWER);
+    const { body: { report: { id: reportId } } } = await postReport(voterToken);
+
+    await agent
+      .post(`/api/v1/reports/${reportId}/vote`)
+      .set('Authorization', `Bearer ${voterToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ vote: 'confirmed' });
+
+    const res = await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ confirmed: 1, disputed: 0, userVote: null });
+  });
+
+  test('issues exactly one database query per request', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+
+    const querySpy = jest.spyOn(pool, 'query');
+
+    await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(querySpy.mock.calls.length).toBe(1);
+  });
+});
+
 // ── Delete report ─────────────────────────────────────────────────────────────
 
 const OTHER_USER = { name: 'Other User', email: 'other@example.com', password: 'ValidPass1!' }
@@ -489,13 +562,13 @@ describe('DELETE /api/v1/reports/:id', () => {
 describe('FCM payload shape — new-report sends push to nearby users', () => {
   // The moduleNameMapper in jest.config.js maps 'config/firebase' to the jest.fn() mock,
   // so this is the jest.fn() spy, not the real firebase-admin send.
-  const { sendPushNotification } = require('../config/firebase')
+  const { sendPushNotificationBatch } = require('../config/firebase')
 
   // Distinct email so this user doesn't collide with REPORTER or OTHER_USER.
   const NEARBY_USER = { name: 'Nearby', email: 'nearby@example.com', password: 'ValidPass1!' }
 
   beforeEach(() => {
-    sendPushNotification.mockClear()
+    sendPushNotificationBatch.mockClear()
   })
 
   test('new-report FCM payload carries type="new_report" and reportId', async () => {
@@ -518,8 +591,8 @@ describe('FCM payload shape — new-report sends push to nearby users', () => {
     // The FCM broadcast is fire-and-forget; give the event loop a tick to settle.
     await new Promise((r) => setTimeout(r, 200))
 
-    expect(sendPushNotification).toHaveBeenCalledWith(
-      'nearby-fcm-token',
+    expect(sendPushNotificationBatch).toHaveBeenCalledWith(
+      ['nearby-fcm-token'],
       expect.stringContaining('🚨'),
       expect.any(String),
       expect.objectContaining({ type: 'new_report', reportId: String(reportId) })
