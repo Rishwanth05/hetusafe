@@ -1,6 +1,7 @@
 'use strict';
 
 const request = require('supertest');
+const bcrypt = require('bcryptjs');
 const app = require('../app');
 const pool = require('../db');
 const redis = require('../config/redis');
@@ -433,6 +434,62 @@ describe('POST /api/v1/auth/forgot-password', () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/if that email exists/i);
   });
+
+  test('malformed email (no @) is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'notanemail' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  test('malformed email (random digits) is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'asdf1234' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  test('empty email field is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: '' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('missing email field is rejected with 400', async () => {
+    const res = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  test('anti-enumeration: registered and unregistered valid emails return identical responses', async () => {
+    await createVerifiedUser();
+
+    const registered = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email });
+
+    const unregistered = await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: 'not.registered@example.com' });
+
+    expect(registered.status).toBe(200);
+    expect(unregistered.status).toBe(200);
+    expect(registered.body.message).toBe(unregistered.body.message);
+  });
 });
 
 describe('POST /api/v1/auth/reset-password', () => {
@@ -466,6 +523,45 @@ describe('POST /api/v1/auth/reset-password', () => {
       .send({ token: 'fake-token', new_password: 'NewValidPass2!' });
 
     expect(res.status).toBe(400);
+  });
+
+  test('reused password matching a non-first history entry is rejected', async () => {
+    const { body: { user } } = await createVerifiedUser();
+    const userId = user.id;
+
+    // Build 3 history entries. Target hash is oldest (3rd in DESC order) so it
+    // is not at index 0 — the case sequential short-circuit could miss.
+    const [hashOld, hash1, hash2] = await Promise.all([
+      bcrypt.hash('OldPass1!', 1),
+      bcrypt.hash('Filler1Pass!', 1),
+      bcrypt.hash('Filler2Pass!', 1),
+    ]);
+    await pool.query(
+      `INSERT INTO password_history (user_id, password_hash, created_at)
+       VALUES ($1, $2, NOW() - INTERVAL '2 minutes'),
+              ($1, $3, NOW() - INTERVAL '1 minute'),
+              ($1, $4, NOW())`,
+      [userId, hashOld, hash1, hash2]
+    );
+
+    await agent
+      .post('/api/v1/auth/forgot-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ email: USER.email });
+
+    const { rows } = await pool.query(
+      'SELECT token FROM password_reset_tokens WHERE email = $1 AND used = false',
+      [USER.email]
+    );
+    const resetToken = rows[0].token;
+
+    const res = await agent
+      .post('/api/v1/auth/reset-password')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ token: resetToken, new_password: 'OldPass1!' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/cannot reuse/i);
   });
 });
 
