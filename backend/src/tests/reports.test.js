@@ -676,7 +676,7 @@ describe('POST /api/v1/reports/resolve', () => {
       .field('report_id', String(reportId));
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/proof/i);
+    expect(res.body.error).toMatch(/proof/i);
   });
 
   test('nonexistent report_id returns 404 and does not upload to S3', async () => {
@@ -776,7 +776,7 @@ describe('POST /api/v1/reports/resolve', () => {
       // to the existing 404 guard unchanged.
       const res = await resolveWithRawId('999999', accessToken);
       expect(res.status).toBe(404);
-      expect(res.body.message).toMatch(/not found/i);
+      expect(res.body.error).toMatch(/not found/i);
     });
   });
 });
