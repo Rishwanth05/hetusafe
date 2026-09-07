@@ -334,7 +334,6 @@ export default function Report() {
     setSubmitting(true)
     setError('')
     const fd = new FormData()
-    fd.append('user_id', user.id)
     fd.append('hazard_type', form.hazard_type)
     fd.append('severity', form.severity)
     fd.append('description', form.description)
