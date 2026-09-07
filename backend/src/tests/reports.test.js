@@ -363,6 +363,79 @@ describe('POST /api/v1/reports/:id/vote', () => {
   });
 });
 
+// ── GET vote counts ───────────────────────────────────────────────────────────
+
+describe('GET /api/v1/reports/:id/votes', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('returns zero counts and null userVote when no votes exist', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+
+    const res = await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ confirmed: 0, disputed: 0, userVote: null });
+  });
+
+  test("returns correct counts and caller's vote after voting", async () => {
+    const { accessToken } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+
+    await agent
+      .post(`/api/v1/reports/${reportId}/vote`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ vote: 'confirmed' });
+
+    const res = await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ confirmed: 1, disputed: 0, userVote: 'confirmed' });
+  });
+
+  test('userVote is null for a user who has not voted when others have', async () => {
+    const VIEWER = { name: 'Viewer', email: 'viewer@example.com', password: 'ValidPass1!' };
+    const { accessToken: voterToken } = await createVerifiedUser();
+    const { accessToken: viewerToken } = await createVerifiedUser(VIEWER);
+    const { body: { report: { id: reportId } } } = await postReport(voterToken);
+
+    await agent
+      .post(`/api/v1/reports/${reportId}/vote`)
+      .set('Authorization', `Bearer ${voterToken}`)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ vote: 'confirmed' });
+
+    const res = await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ confirmed: 1, disputed: 0, userVote: null });
+  });
+
+  test('issues exactly one database query per request', async () => {
+    const { accessToken } = await createVerifiedUser();
+    const { body: { report: { id: reportId } } } = await postReport(accessToken);
+
+    const querySpy = jest.spyOn(pool, 'query');
+
+    await agent
+      .get(`/api/v1/reports/${reportId}/votes`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-CSRF-Token', csrfToken);
+
+    expect(querySpy.mock.calls.length).toBe(1);
+  });
+});
+
 // ── Delete report ─────────────────────────────────────────────────────────────
 
 const OTHER_USER = { name: 'Other User', email: 'other@example.com', password: 'ValidPass1!' }
