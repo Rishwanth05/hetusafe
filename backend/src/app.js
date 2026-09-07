@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const { doubleCsrf } = require('csrf-csrf');
 const rateLimit = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
+const pool  = require('./db');
 const redis = require('./config/redis');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
@@ -51,6 +52,63 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.get('/', (req, res) => res.json({ message: 'Hetusafe backend ✅' }));
+
+// ── Health check ──────────────────────────────────────────────────────────────
+// Render and UptimeRobot poll this endpoint. Must reflect real dependency
+// health: returning 200 when the DB or Redis is down masks outages from
+// monitoring tools and makes deploys with bad config look healthy.
+//
+// Registered before the global rate limiter so monitoring traffic is never
+// throttled and so the redis.status early-exit guard fires without first
+// hitting the RedisStore-backed limiter.
+//
+// Each check races against a 2-second hard timeout so a dead dependency
+// fails fast (503) instead of hanging and confusing Render's health-check
+// timeout. Response body omits connection strings and stack traces — the
+// endpoint is publicly reachable.
+//
+// Shutdown interaction (E-6): pool.end() sets pool.ended = true and
+// redis.quit() sets redis.status = 'end' before any in-flight HTTP requests
+// complete (server.close waits for them first). The early-exit check below
+// catches this state and returns 503 so monitoring correctly shows the
+// instance as going down rather than throwing on a closed pool.
+const HEALTH_TIMEOUT_MS = 2000;
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), ms)
+    ),
+  ]);
+}
+
+app.get('/health', async (req, res) => {
+  const time = new Date().toISOString();
+
+  // Detect graceful-shutdown state — pool.ended is true after pool.end(),
+  // redis.status is 'end' after redis.quit().
+  if (pool.ended || redis.status === 'end') {
+    return res.status(503).json({ status: 'shutting_down', time });
+  }
+
+  const [dbResult, redisResult] = await Promise.allSettled([
+    withTimeout(pool.query('SELECT 1'), HEALTH_TIMEOUT_MS),
+    withTimeout(redis.ping(),           HEALTH_TIMEOUT_MS),
+  ]);
+
+  const checks = {
+    db:    dbResult.status    === 'fulfilled' ? 'ok' : dbResult.reason.message,
+    redis: redisResult.status === 'fulfilled' ? 'ok' : redisResult.reason.message,
+  };
+
+  const healthy = checks.db === 'ok' && checks.redis === 'ok';
+  return res
+    .status(healthy ? 200 : 503)
+    .json({ status: healthy ? 'ok' : 'degraded', time, checks });
+});
 
 // SEC7 — Global rate limit: 100 requests per minute per IP
 const globalLimiter = rateLimit({
@@ -110,9 +168,6 @@ const swaggerSpec = swaggerJsdoc({
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 }
-
-app.get('/', (req, res) => res.json({ message: 'Hetusafe backend ✅' }));
-app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 // SEC4 — expose CSRF token to frontend (generateCsrfToken sets cookie + returns token)
 app.get('/api/csrf-token', (req, res) => {
