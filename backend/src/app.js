@@ -48,7 +48,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -207,6 +207,8 @@ if (Sentry) {
 app.use((err, req, res, next) => {
   if (err.code === 'EBADCSRFTOKEN')
     return res.status(403).json({ message: 'Invalid or missing CSRF token.' });
+  if (err.type === 'entity.too.large')
+    return res.status(413).json({ error: 'Request body too large.' });
   console.error('❌', err.message);
   const message = process.env.NODE_ENV === 'production'
     ? 'Internal server error'
