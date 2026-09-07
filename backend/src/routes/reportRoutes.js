@@ -677,21 +677,21 @@ router.get('/:id/votes', verifyToken, async (req, res, next) => {
     const reportId = req.params.id;
     const userId = req.user.id;
 
-    const counts = await pool.query(
-      `SELECT vote, COUNT(*) as count FROM resolution_votes WHERE report_id = $1 GROUP BY vote`,
-      [reportId]
-    );
-
-    const userVote = await pool.query(
-      `SELECT vote FROM resolution_votes WHERE report_id = $1 AND user_id = $2`,
+    const { rows: [row] } = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE vote = 'confirmed') AS confirmed,
+         COUNT(*) FILTER (WHERE vote = 'disputed')  AS disputed,
+         MAX(CASE WHEN user_id = $2 THEN vote END)  AS user_vote
+       FROM resolution_votes
+       WHERE report_id = $1`,
       [reportId, userId]
     );
 
-    const result = { confirmed: 0, disputed: 0, userVote: null };
-    counts.rows.forEach(r => { result[r.vote] = parseInt(r.count); });
-    if (userVote.rows.length > 0) result.userVote = userVote.rows[0].vote;
-
-    res.json(result);
+    res.json({
+      confirmed: parseInt(row.confirmed) || 0,
+      disputed:  parseInt(row.disputed)  || 0,
+      userVote:  row.user_vote           || null,
+    });
   } catch (err) {
     next(err);
   }
