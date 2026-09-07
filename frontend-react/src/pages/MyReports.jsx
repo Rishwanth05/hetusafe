@@ -5,6 +5,8 @@ import client from '../api/client'
 import NotificationCenter from '../components/NotificationCenter'
 import { AppDrawer, BottomNav, Card, Button, PriorityBadge } from '../components/ui'
 
+const REFETCH_MIN_INTERVAL_MS = 30_000
+
 export default function MyReports() {
   const { user } = useAuth()
   const navigate  = useNavigate()
@@ -20,23 +22,28 @@ export default function MyReports() {
   const [unreadCount, setUnreadCount]   = useState(0)
   const navMenuRef = useRef(null)
   const drawerRef  = useRef(null)
+  const lastFetchedRef = useRef(0)
 
   /* ── Fetch: same API call used by Profile ─────────────────────────────── */
   useEffect(() => {
     client.get('/auth/my-reports')
-      .then(({ data }) => setReports(data))
+      .then(({ data }) => {
+        setReports(data)
+        lastFetchedRef.current = Date.now()
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
-  /* ── Refetch when the user returns to this tab (e.g. after resolving elsewhere) ── */
+  /* ── Refetch when the user returns to this tab, at most once per 30 s ── */
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        client.get('/auth/my-reports')
-          .then(({ data }) => setReports(data))
-          .catch(() => {})
-      }
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastFetchedRef.current < REFETCH_MIN_INTERVAL_MS) return
+      lastFetchedRef.current = Date.now()
+      client.get('/auth/my-reports')
+        .then(({ data }) => setReports(data))
+        .catch(() => {})
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
