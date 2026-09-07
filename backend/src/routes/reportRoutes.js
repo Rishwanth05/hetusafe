@@ -47,6 +47,16 @@ const createReportSchema = z.object({
   location_method: z.string().max(20).optional(),
 });
 
+// reports.id is a PostgreSQL INTEGER (signed 32-bit, max 2 147 483 647).
+// Multipart fields arrive as strings; z.coerce converts before validating.
+const resolveSchema = z.object({
+  report_id: z.coerce
+    .number()
+    .int('report_id must be a positive integer')
+    .positive('report_id must be a positive integer')
+    .max(2_147_483_647, 'report_id is out of range'),
+});
+
 const checkDuplicateSchema = z.object({
   latitude: latField,
   longitude: lngField,
@@ -475,12 +485,9 @@ router.post("/resolve", verifyToken, (req, res, next) => {
     }
     next()
   })
-}, async (req, res, next) => {
+}, validate(resolveSchema), async (req, res, next) => {
   try {
     const { report_id } = req.body;
-
-    if (!report_id)
-      return res.status(400).json({ message: "report_id is required" });
 
     if (!req.file)
       return res.status(400).json({ message: "Camera proof image is required to resolve a report" });
