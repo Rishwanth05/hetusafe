@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('./config/validateEnv').validateEnv();
 
 // MON1 — Sentry must initialise before any other require; only load when DSN is set
 // (require('@sentry/node') hangs in WSL2 due to OTLP endpoint probing on localhost:4318)
