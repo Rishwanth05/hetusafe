@@ -7,6 +7,7 @@ const { sendPushNotification, sendPushNotificationBatch } = require("../config/f
 const redis = require("../config/redis");
 const { getCache, setCache } = redis;
 const { verifyToken } = require('../middleware/auth');
+const { fileTypeFromBuffer } = require('../lib/imageType');
 const sharp = require('sharp');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
@@ -82,8 +83,6 @@ const upload = multer({
 // (strips EXIF/GPS metadata and embedded payloads), then uploads to S3.
 // Throws with err.status = 400 on invalid type; propagates S3/sharp errors otherwise.
 async function processAndUploadImage(buffer) {
-  // file-type is ESM-only; dynamic import works from CJS on Node 18+.
-  const { fileTypeFromBuffer } = await import('file-type')
   const detected = await fileTypeFromBuffer(buffer)
 
   if (!detected || !ALLOWED_IMAGE_MIME_TYPES.has(detected.mime)) {

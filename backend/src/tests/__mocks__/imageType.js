@@ -1,9 +1,11 @@
 'use strict';
 
-// CJS replacement for the ESM-only file-type package. Jest cannot dynamically
-// import() real ESM modules from CJS code without --experimental-vm-modules.
-// This mock reads the same magic bytes the real library would inspect, so
-// the "wrong magic bytes → 400" test exercises the actual rejection path.
+// CJS mock for src/lib/imageType.js.
+// Replaces the wrapper that calls await import('file-type') so that Jest's
+// moduleNameMapper can intercept require('../lib/imageType') without needing
+// --experimental-vm-modules. Reads the same magic bytes the real library
+// would inspect, so the "wrong magic bytes → 400" test exercises the actual
+// rejection path in processAndUploadImage.
 
 async function fileTypeFromBuffer(buffer) {
   if (!buffer || buffer.length < 4) return null;
