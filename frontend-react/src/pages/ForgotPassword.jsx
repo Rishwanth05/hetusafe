@@ -23,7 +23,7 @@ export default function ForgotPassword() {
       await client.post('/auth/forgot-password', { email })
       setSubmitted(true)
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong')
+      setError(err.response?.data?.error || err.response?.data?.message || 'Something went wrong')
     } finally {
       setLoading(false)
     }
