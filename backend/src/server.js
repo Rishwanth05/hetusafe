@@ -12,7 +12,8 @@ if (process.env.SENTRY_DSN) {
   });
 }
 
-require('./db');
+const pool  = require('./db');
+const redis = require('./config/redis');
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -67,3 +68,50 @@ server.listen(PORT, () => {
   startDailyBackup();
   console.log('[backup] Daily backup cron scheduled for 2AM');
 });
+
+// ── Graceful shutdown ──────────────────────────────────────────────────────
+// Render sends SIGTERM before terminating and waits 30 s before SIGKILL.
+// We drain HTTP + WebSocket connections first, then close DB and Redis,
+// all within a 25 s window to stay well inside that limit.
+const SHUTDOWN_TIMEOUT_MS = 25_000;
+
+function gracefulShutdown(signal) {
+  console.log(`[shutdown] ${signal} received — draining connections...`);
+
+  // De-register so a second signal doesn't race with cleanup.
+  process.off('SIGTERM', onSIGTERM);
+  process.off('SIGINT',  onSIGINT);
+
+  // 1. Stop Socket.io connections — without this, server.close() may never
+  //    fire its callback because WebSocket connections keep the server active.
+  io.close();
+
+  // 2. Stop accepting new HTTP connections; wait for in-flight requests.
+  server.close(async () => {
+    console.log('[shutdown] HTTP server closed');
+    try {
+      // 3. Close the PostgreSQL pool after all requests have drained, so no
+      //    in-flight request hits a closed pool and gets a 500.
+      await pool.end();
+      console.log('[shutdown] PostgreSQL pool closed');
+      // 4. Gracefully quit Redis (lets in-flight commands complete).
+      await redis.quit();
+      console.log('[shutdown] Redis disconnected');
+    } catch (err) {
+      console.error('[shutdown] Cleanup error:', err.message);
+    }
+    console.log('[shutdown] Clean exit');
+    process.exit(0);
+  });
+
+  // 5. Hard deadline — exits before Render force-kills with SIGKILL.
+  setTimeout(() => {
+    console.error('[shutdown] Grace period exceeded — forcing exit');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS).unref();
+}
+
+const onSIGTERM = () => gracefulShutdown('SIGTERM');
+const onSIGINT  = () => gracefulShutdown('SIGINT');
+process.on('SIGTERM', onSIGTERM);
+process.on('SIGINT',  onSIGINT);
