@@ -704,12 +704,12 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res, n
       [userId]
     );
 
-    for (const row of history.rows) {
-      const reused = await bcrypt.compare(new_password, row.password_hash);
-      if (reused) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: 'You cannot reuse one of your last 5 passwords.' });
-      }
+    const compareResults = await Promise.all(
+      history.rows.map(row => bcrypt.compare(new_password, row.password_hash))
+    );
+    if (compareResults.some(r => r)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'You cannot reuse one of your last 5 passwords.' });
     }
 
     const password_hash = await bcrypt.hash(new_password, 12);
