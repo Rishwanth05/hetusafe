@@ -360,7 +360,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
     const userId = req.user.id;
 
     if (hazard_type === 'Others' && !custom_description?.trim()) {
-      return res.status(400).json({ message: "Please describe the hazard type" });
+      return res.status(400).json({ error: "Please describe the hazard type" });
     }
 
     const clean_hazard_type = xss(hazard_type.trim());
@@ -490,7 +490,7 @@ router.post("/resolve", verifyToken, (req, res, next) => {
     const { report_id } = req.body;
 
     if (!req.file)
-      return res.status(400).json({ message: "Camera proof image is required to resolve a report" });
+      return res.status(400).json({ error: "Camera proof image is required to resolve a report" });
 
     const { rows: reportRows } = await pool.query(
       'SELECT id, user_id, status, hazard_type FROM reports WHERE id = $1',
@@ -498,9 +498,9 @@ router.post("/resolve", verifyToken, (req, res, next) => {
     );
     const report = reportRows[0];
     if (!report)
-      return res.status(404).json({ message: 'Report not found' });
+      return res.status(404).json({ error: 'Report not found' });
     if (report.status !== 'active')
-      return res.status(409).json({ message: 'Report is already resolved or archived' });
+      return res.status(409).json({ error: 'Report is already resolved or archived' });
 
     let proof_url
     try {

@@ -211,7 +211,7 @@ app.use((err, req, res, next) => {
   const message = process.env.NODE_ENV === 'production'
     ? 'Internal server error'
     : err.message || 'Internal server error';
-  res.status(err.status || 500).json({ error: { message } });
+  res.status(err.status || 500).json({ error: message });
 });
 
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
