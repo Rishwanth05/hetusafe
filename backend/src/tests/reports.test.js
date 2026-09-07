@@ -711,6 +711,74 @@ describe('POST /api/v1/reports/resolve', () => {
     );
     expect(scoreAfter).toBe(scoreBefore + 25);
   });
+
+  // ── report_id input validation ────────────────────────────────────────────
+  //
+  // Before this fix, invalid report_id values caused confusing outcomes:
+  //   non-integer strings → 500 (PostgreSQL type-cast error leaked via next(err))
+  //   negative numbers    → 404 (valid integer, but no matching row)
+  //   zero (as string)    → 404 (valid integer, but no matching row)
+  //   oversize (>INT_MAX) → 500 (PostgreSQL "integer out of range")
+  //
+  // The resolveSchema + validate() middleware now catches all of these
+  // before the DB is queried, returning a clean 400.
+
+  describe('report_id validation', () => {
+    // Helper: POST /resolve with an arbitrary raw report_id string + proof image.
+    function resolveWithRawId(rawId, accessToken) {
+      const req = agent
+        .post('/api/v1/reports/resolve')
+        .set('X-CSRF-Token', csrfToken)
+        .set('Authorization', `Bearer ${accessToken}`);
+      if (rawId !== undefined) req.field('report_id', String(rawId));
+      return req.attach('proof', testJpegBuffer, { filename: 'proof.jpg', contentType: 'image/jpeg' });
+    }
+
+    let accessToken;
+    beforeEach(async () => {
+      ({ accessToken } = await createVerifiedUser());
+    });
+
+    test('non-numeric string returns 400, not 500', async () => {
+      const res = await resolveWithRawId('abc', accessToken);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBeTruthy();
+    });
+
+    test('decimal returns 400', async () => {
+      const res = await resolveWithRawId('1.5', accessToken);
+      expect(res.status).toBe(400);
+    });
+
+    test('negative integer returns 400, not 404', async () => {
+      const res = await resolveWithRawId('-1', accessToken);
+      expect(res.status).toBe(400);
+    });
+
+    test('zero returns 400, not 404', async () => {
+      const res = await resolveWithRawId('0', accessToken);
+      expect(res.status).toBe(400);
+    });
+
+    test('value exceeding PostgreSQL INT_MAX (2147483647) returns 400, not 500', async () => {
+      const res = await resolveWithRawId('9999999999', accessToken);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/out of range/i);
+    });
+
+    test('SQL-injection-style string returns 400, not 500', async () => {
+      const res = await resolveWithRawId("1; DROP TABLE reports; --", accessToken);
+      expect(res.status).toBe(400);
+    });
+
+    test('valid integer report_id still reaches the route logic (404 for nonexistent)', async () => {
+      // Confirms the validation layer is additive — a valid id passes through
+      // to the existing 404 guard unchanged.
+      const res = await resolveWithRawId('999999', accessToken);
+      expect(res.status).toBe(404);
+      expect(res.body.message).toMatch(/not found/i);
+    });
+  });
 });
 
 // ── GET /trust/:userId — auth gate ───────────────────────────────────────────
