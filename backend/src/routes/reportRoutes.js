@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const pool = require("../db");
 const multer = require("multer");
 const xss = require("xss");
-const { sendPushNotification } = require("../config/firebase");
+const { sendPushNotification, sendPushNotificationBatch } = require("../config/firebase");
 const redis = require("../config/redis");
 const { getCache, setCache } = redis;
 const { verifyToken } = require('../middleware/auth');
@@ -450,12 +450,11 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
         if (rows.length === 0) return;
         const notifTitle = `🚨 ${clean_hazard_type}`;
         const notifBody = `${severity} hazard reported within 30 miles of you`;
-        rows.forEach(({ fcm_token }) =>
-          sendPushNotification(fcm_token, notifTitle, notifBody, {
-            type: 'new_report',
-            reportId: String(newReport.id),
-          })
-        );
+        const fcmTokens = rows.map(({ fcm_token }) => fcm_token);
+        sendPushNotificationBatch(fcmTokens, notifTitle, notifBody, {
+          type: 'new_report',
+          reportId: String(newReport.id),
+        });
       })
       .catch((err) => console.error('FCM broadcast query failed:', err.message));
 
