@@ -33,6 +33,9 @@ async function callRefresh(refreshToken) {
   )
 }
 
+let isRefreshing = false
+let failedQueue = []
+
 // ── Page-load session restore ─────────────────────────────────────────────────
 // Called by AuthContext on mount. If a refreshToken is in localStorage, silently
 // exchanges it for a new access token so the first API call doesn't get a 401.
@@ -86,9 +89,6 @@ client.interceptors.request.use(async (config) => {
 })
 
 // ── Response interceptor: auto-refresh on 401 ────────────────────────────────
-let isRefreshing = false
-let failedQueue = []
-
 function processQueue(error, token = null) {
   failedQueue.forEach(({ resolve, reject }) => {
     error ? reject(error) : resolve(token)
