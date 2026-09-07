@@ -52,19 +52,47 @@ setImmediate(() => {
   });
 });
 
-const _query = pool.query.bind(pool);
-pool.query = async function slowQueryAware(text, params) {
-  const start = Date.now();
-  const result = await _query(text, params);
-  const duration = Date.now() - start;
-  if (duration > 200 && Sentry) {
-    const sql = typeof text === 'string' ? text : (text && text.text) || '';
+// Shared slow-query reporter — fires for both pool.query and transaction clients.
+function reportSlowQuery(sql, duration) {
+  console.warn(`[slow-query] ${duration}ms: ${sql.slice(0, 200)}`);
+  if (Sentry) {
     Sentry.captureMessage('Slow query detected', {
       level: 'warning',
       extra: { query: sql.slice(0, 200), duration_ms: duration },
     });
   }
-  return result;
+}
+
+// Wraps any query function with slow-query timing. Arguments are spread so all
+// pg call signatures (text, text+values, query-object) are passed through unchanged.
+function wrapQuery(queryFn) {
+  return async function slowQueryAware(...args) {
+    const start = Date.now();
+    const result = await queryFn(...args);
+    const duration = Date.now() - start;
+    if (duration > 200) {
+      const text = args[0];
+      const sql = typeof text === 'string' ? text : (text && text.text) || '';
+      reportSlowQuery(sql, duration);
+    }
+    return result;
+  };
+}
+
+pool.query = wrapQuery(pool.query.bind(pool));
+
+// Wrap pool.connect() so every checked-out client gets the same slow-query
+// instrumentation on its query() method. The callback style (used only by the
+// startup connectivity check below) is passed through unchanged.
+const _connect = pool.connect.bind(pool);
+pool.connect = function instrumentedConnect(...args) {
+  if (typeof args[0] === 'function') {
+    return _connect(...args);
+  }
+  return _connect().then(client => {
+    client.query = wrapQuery(client.query.bind(client));
+    return client;
+  });
 };
 
 module.exports = pool;
