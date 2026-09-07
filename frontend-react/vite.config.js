@@ -88,5 +88,11 @@ export default defineConfig({
       '/api': { target: 'http://localhost:5000', changeOrigin: true },
       '/uploads': { target: 'http://localhost:5000', changeOrigin: true },
     },
+    // WSL2: /mnt/c/ is 9p/drvfs (Windows NTFS) which does not emit inotify events.
+    // Polling lets chokidar detect file changes without relying on inotify.
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
   },
 })
