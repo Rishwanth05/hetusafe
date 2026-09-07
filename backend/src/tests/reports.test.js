@@ -562,13 +562,13 @@ describe('DELETE /api/v1/reports/:id', () => {
 describe('FCM payload shape — new-report sends push to nearby users', () => {
   // The moduleNameMapper in jest.config.js maps 'config/firebase' to the jest.fn() mock,
   // so this is the jest.fn() spy, not the real firebase-admin send.
-  const { sendPushNotification } = require('../config/firebase')
+  const { sendPushNotificationBatch } = require('../config/firebase')
 
   // Distinct email so this user doesn't collide with REPORTER or OTHER_USER.
   const NEARBY_USER = { name: 'Nearby', email: 'nearby@example.com', password: 'ValidPass1!' }
 
   beforeEach(() => {
-    sendPushNotification.mockClear()
+    sendPushNotificationBatch.mockClear()
   })
 
   test('new-report FCM payload carries type="new_report" and reportId', async () => {
@@ -591,8 +591,8 @@ describe('FCM payload shape — new-report sends push to nearby users', () => {
     // The FCM broadcast is fire-and-forget; give the event loop a tick to settle.
     await new Promise((r) => setTimeout(r, 200))
 
-    expect(sendPushNotification).toHaveBeenCalledWith(
-      'nearby-fcm-token',
+    expect(sendPushNotificationBatch).toHaveBeenCalledWith(
+      ['nearby-fcm-token'],
       expect.stringContaining('🚨'),
       expect.any(String),
       expect.objectContaining({ type: 'new_report', reportId: String(reportId) })
