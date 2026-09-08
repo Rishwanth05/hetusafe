@@ -4,7 +4,6 @@ const { getCache, setCache } = require('../config/redis');
 
 const router = express.Router();
 
-// LAND-2 — Public stats for landing page, no auth required
 router.get('/stats', async (req, res, next) => {
   try {
     const cached = await getCache('public:stats');

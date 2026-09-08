@@ -33,7 +33,6 @@ async function insertUser({ name = 'Test User', email = 'user@admin-test.com', r
   return { token, userId: user.id, user };
 }
 
-// Convenience wrappers
 const createUser = (overrides) => insertUser({ role: 'user', ...overrides });
 const createAdmin = (overrides) => insertUser({ role: 'admin', email: 'admin@admin-test.com', ...overrides });
 
@@ -765,8 +764,7 @@ describe('GET /api/v1/admin/audit-log', () => {
 });
 
 // ── CSRF enforcement ──────────────────────────────────────────────────────────
-// doubleCsrfProtection runs BEFORE verifyToken on all state-changing methods.
-// The error code EBADCSRFTOKEN maps to: 403 + { message: 'Invalid or missing CSRF token.' }
+// doubleCsrfProtection runs before verifyToken; EBADCSRFTOKEN → 403.
 
 describe('CSRF protection', () => {
   test('POST without X-CSRF-Token header returns 403 with CSRF error', async () => {
@@ -817,10 +815,7 @@ describe('CSRF protection', () => {
 });
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-// authLimiter: max 20 requests per 15 min per IP, backed by Redis.
-// Route used: POST /forgot-password — fast (simple DB SELECT, returns 200 for
-// unknown emails without sending anything), and has no dedicated per-route
-// rate limiter of its own.
+// authLimiter: 20 req / 15 min. Using /forgot-password (no per-route limiter of its own).
 
 describe('Rate limiting on auth routes', () => {
   test('first request succeeds; repeated requests past the limit return 429', async () => {

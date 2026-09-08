@@ -8,13 +8,11 @@ const INPUT_CLS = 'w-full bg-elevated border border-edge rounded-xl px-4 py-3 te
 export default function ForgotPassword() {
   const navigate = useNavigate()
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [email, setEmail]         = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
 
-  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleSubmit = async () => {
     if (!email.trim()) { setError('Please enter your email'); return }
     setLoading(true)

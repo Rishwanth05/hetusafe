@@ -4,7 +4,6 @@ const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET notifications — return rows targeted to this user OR global (user_id IS NULL)
 router.get('/', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(`
@@ -20,7 +19,6 @@ router.get('/', verifyToken, async (req, res, next) => {
   }
 });
 
-// GET unread count — only count rows visible to this user
 router.get('/unread-count', verifyToken, async (req, res, next) => {
   try {
     const lastRead = await pool.query(
@@ -43,7 +41,6 @@ router.get('/unread-count', verifyToken, async (req, res, next) => {
   }
 });
 
-// PUT mark all read
 router.put('/read-all', verifyToken, async (req, res, next) => {
   try {
     await pool.query(
@@ -58,8 +55,7 @@ router.put('/read-all', verifyToken, async (req, res, next) => {
   }
 });
 
-// DELETE /clear-all — soft-delete all rows this user can see (their own + global)
-// MUST be declared before /:id so Express doesn't treat "clear-all" as an :id value
+// Must be declared before /:id so Express doesn't treat "clear-all" as a param
 router.delete('/clear-all', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
@@ -79,7 +75,6 @@ router.delete('/clear-all', verifyToken, async (req, res, next) => {
   }
 });
 
-// DELETE /:id — soft-delete a single notification this user can see
 router.delete('/:id', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(

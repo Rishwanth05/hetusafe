@@ -76,7 +76,6 @@ async function loginUser(email = USER.email, password = USER.password) {
 
 beforeAll(async () => {
   agent = request.agent(app);
-  // Fetch CSRF token once; the cookie is stored in the agent for all requests
   const res = await agent.get('/api/csrf-token');
   csrfToken = res.body.csrfToken;
   expect(csrfToken).toBeTruthy();
@@ -85,7 +84,6 @@ beforeAll(async () => {
 beforeEach(async () => {
   // Flush Redis DB 1 so rate-limit counters don't bleed between tests
   await redis.flushdb();
-  // Wipe auth-related tables so each test starts clean
   await pool.query(
     `TRUNCATE users, otp_codes, refresh_tokens,
      password_reset_tokens, password_history, account_deletions

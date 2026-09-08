@@ -73,8 +73,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many attempts. Try again in 15 minutes.' },
-  // passOnStoreError: fail-open if Redis is briefly unreachable (logs the error, allows the request)
-  passOnStoreError: true,
+  passOnStoreError: true,  // fail-open if Redis is briefly unreachable
   store: new RedisStore({
     sendCommand: (...args) => redis.call(...args),
     prefix: 'rl_login:',
@@ -87,8 +86,7 @@ const otpLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many OTP requests. Try again in 30 minutes.' },
-  // passOnStoreError: fail-open if Redis is briefly unreachable (logs the error, allows the request)
-  passOnStoreError: true,
+  passOnStoreError: true,  // fail-open if Redis is briefly unreachable
   store: new RedisStore({
     sendCommand: (...args) => redis.call(...args),
     prefix: 'rl_otp:',
@@ -479,7 +477,7 @@ router.get('/my-reports', verifyToken, async (req, res, next) => {
 // ── UPDATE NAME ────────────────────────────────────────────────────────────────
 router.put('/update-name', verifyToken, validate(updateNameSchema), async (req, res, next) => {
   try {
-    const { name } = req.body; // trimmed and length-validated by Zod
+    const { name } = req.body;
     const clean_name = xss(name);
 
     const result = await pool.query(
@@ -729,7 +727,6 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res, n
   }
 });
 
-// GET /auth/emergency-contacts — fetch user's emergency contacts
 router.get('/emergency-contacts', verifyToken, async (req, res, next) => {
   try {
     const result = await pool.query(
@@ -742,7 +739,6 @@ router.get('/emergency-contacts', verifyToken, async (req, res, next) => {
   }
 });
 
-// PUT /auth/emergency-contacts — save user's emergency contacts
 router.put('/emergency-contacts', verifyToken, validate(emergencyContactsSchema), async (req, res, next) => {
   try {
     const { contacts } = req.body;

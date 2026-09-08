@@ -15,7 +15,6 @@ module.exports = async () => {
   const { Pool } = require('pg');
   const Redis = require('ioredis');
 
-  // Verify the test DB is reachable
   const pool = new Pool({ connectionString: process.env.DB_DEV_URL });
   try {
     await pool.query('SELECT 1');

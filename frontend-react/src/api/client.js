@@ -20,7 +20,6 @@ async function getCsrfToken() {
   return fetchCsrfToken()
 }
 
-// ── Refresh helper (raw axios, no interceptors) ───────────────────────────────
 async function callRefresh(refreshToken) {
   if (!csrfToken) await fetchCsrfToken()
   return axios.post(
@@ -37,8 +36,7 @@ let isRefreshing = false
 let failedQueue = []
 
 // ── Page-load session restore ─────────────────────────────────────────────────
-// Called by AuthContext on mount. If a refreshToken is in localStorage, silently
-// exchanges it for a new access token so the first API call doesn't get a 401.
+// Exchanges a stored refreshToken for a new accessToken on mount, before the first API call.
 export async function initializeAuth() {
   const refreshToken = localStorage.getItem('refreshToken')
   if (!refreshToken) return null
@@ -72,10 +70,8 @@ export async function initializeAuth() {
   return initializingPromise
 }
 
-// ── Axios instance ────────────────────────────────────────────────────────────
 const client = axios.create({ baseURL: `${import.meta.env.VITE_API_URL || ''}/api/v1`, withCredentials: true })
 
-// ── Request interceptor ───────────────────────────────────────────────────────
 client.interceptors.request.use(async (config) => {
   // Only set Authorization if not already pre-set by the caller (e.g. logout)
   if (accessToken && !config.headers.Authorization) {
@@ -88,7 +84,6 @@ client.interceptors.request.use(async (config) => {
   return config
 })
 
-// ── Response interceptor: auto-refresh on 401 ────────────────────────────────
 function processQueue(error, token = null) {
   failedQueue.forEach(({ resolve, reject }) => {
     error ? reject(error) : resolve(token)

@@ -37,10 +37,8 @@ function getConnectionConfig() {
 
 const pool = new Pool(getConnectionConfig());
 
-// Defer the startup connectivity check until after all modules finish loading.
-// pool.connect() starts a 2 s timer immediately; if synchronous module loading
-// (Firebase, AWS SDK, routes) takes longer the timer fires before the callback
-// can run even though Postgres is reachable.
+// Defer connectivity check so module loading (Firebase, AWS, routes) completes
+// before the 2s connection timeout fires.
 setImmediate(() => {
   pool.connect((err, client, release) => {
     if (err) {
@@ -52,7 +50,7 @@ setImmediate(() => {
   });
 });
 
-// Shared slow-query reporter — fires for both pool.query and transaction clients.
+// Reports slow queries for both pool.query and transaction clients.
 function reportSlowQuery(sql, duration) {
   console.warn(`[slow-query] ${duration}ms: ${sql.slice(0, 200)}`);
   if (Sentry) {
@@ -63,8 +61,7 @@ function reportSlowQuery(sql, duration) {
   }
 }
 
-// Wraps any query function with slow-query timing. Arguments are spread so all
-// pg call signatures (text, text+values, query-object) are passed through unchanged.
+// Preserves all pg call signatures (text, text+values, query-object) through spread.
 function wrapQuery(queryFn) {
   return async function slowQueryAware(...args) {
     const start = Date.now();
@@ -81,9 +78,8 @@ function wrapQuery(queryFn) {
 
 pool.query = wrapQuery(pool.query.bind(pool));
 
-// Wrap pool.connect() so every checked-out client gets the same slow-query
-// instrumentation on its query() method. The callback style (used only by the
-// startup connectivity check below) is passed through unchanged.
+// Wrap pool.connect() so transaction clients also get slow-query instrumentation.
+// The callback form (used only by the startup check above) is passed through unchanged.
 const _connect = pool.connect.bind(pool);
 pool.connect = function instrumentedConnect(...args) {
   if (typeof args[0] === 'function') {

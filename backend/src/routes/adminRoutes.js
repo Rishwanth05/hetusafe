@@ -107,8 +107,7 @@ router.delete('/users/:id', async (req, res, next) => {
 
   let client;
   try {
-    // All three writes are wrapped in a single transaction: if the audit-log
-    // insert fails, the user deletion and report anonymization are rolled back.
+    // Transaction: if the audit-log insert fails, the user deletion and anonymisation are rolled back.
     client = await pool.connect();
     await client.query('BEGIN');
 

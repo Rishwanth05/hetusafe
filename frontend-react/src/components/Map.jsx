@@ -39,7 +39,6 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
   const [isHeatmap, setIsHeatmap] = useState(false)
   const [mapReady, setMapReady] = useState(false)
 
-  // Init map
   useEffect(() => {
     if (mapRef.current) return
 
@@ -59,7 +58,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
     }
 
     mapRef.current.on('load', () => {
-      // MAP1 — GeoJSON source with clustering enabled
+      // GeoJSON source with clustering enabled
       mapRef.current.addSource('reports', {
         type: 'geojson',
         data: reportsToGeoJSON([]),
@@ -71,7 +70,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         },
       })
 
-      // MAP1 — Cluster circles
+      // Cluster circles
       mapRef.current.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -94,7 +93,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         },
       })
 
-      // MAP1 — Cluster count labels
+      // Cluster count labels
       mapRef.current.addLayer({
         id: 'cluster-count',
         type: 'symbol',
@@ -108,7 +107,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         paint: { 'text-color': '#fff' },
       })
 
-      // MAP1 — Individual pins (unclustered)
+      // Individual pins (unclustered)
       mapRef.current.addLayer({
         id: 'unclustered-point',
         type: 'circle',
@@ -123,7 +122,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         },
       })
 
-      // MAP2 — Heatmap layer (hidden by default)
+      // Heatmap layer (hidden by default)
       mapRef.current.addLayer({
         id: 'heatmap-layer',
         type: 'heatmap',
@@ -146,7 +145,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         },
       })
 
-      // MAP1 — Click cluster to zoom in
+      // Click cluster to zoom in
       mapRef.current.on('click', 'clusters', (e) => {
         const features = mapRef.current.queryRenderedFeatures(e.point, { layers: ['clusters'] })
         const clusterId = features[0].properties.cluster_id
@@ -156,7 +155,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
         })
       })
 
-      // MAP1 — Popup on individual pin click
+      // Popup on individual pin click
       mapRef.current.on('click', 'unclustered-point', (e) => {
         const props = e.features[0].properties
         const coords = e.features[0].geometry.coordinates.slice()
@@ -231,7 +230,7 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
     }
   }, [reports, mapReady])
 
-  // MAP2 — Toggle heatmap vs cluster layers
+  // Toggle heatmap vs cluster layers
   const toggleHeatmap = () => {
     if (!mapRef.current) return
     const next = !isHeatmap
@@ -246,7 +245,6 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
 
-      {/* MAP2 — Heatmap toggle button */}
       {showHeatmapToggle && (
         <button
           onClick={toggleHeatmap}

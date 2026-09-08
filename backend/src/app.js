@@ -55,25 +55,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => res.json({ message: 'Hetusafe backend ✅' }));
 
-// ── Health check ──────────────────────────────────────────────────────────────
-// Render and UptimeRobot poll this endpoint. Must reflect real dependency
-// health: returning 200 when the DB or Redis is down masks outages from
-// monitoring tools and makes deploys with bad config look healthy.
-//
-// Registered before the global rate limiter so monitoring traffic is never
-// throttled and so the redis.status early-exit guard fires without first
-// hitting the RedisStore-backed limiter.
-//
-// Each check races against a 2-second hard timeout so a dead dependency
-// fails fast (503) instead of hanging and confusing Render's health-check
-// timeout. Response body omits connection strings and stack traces — the
-// endpoint is publicly reachable.
-//
-// Shutdown interaction (E-6): pool.end() sets pool.ended = true and
-// redis.quit() sets redis.status = 'end' before any in-flight HTTP requests
-// complete (server.close waits for them first). The early-exit check below
-// catches this state and returns 503 so monitoring correctly shows the
-// instance as going down rather than throwing on a closed pool.
+// ── Health check ──────────────────────────────────────────────
+// Registered before globalLimiter so monitoring polls aren't throttled.
+// Returns 503 when any dependency is down, and during graceful shutdown —
+// a 200 with a dead DB would look healthy to Render/UptimeRobot.
 const HEALTH_TIMEOUT_MS = 2000;
 
 function withTimeout(promise, ms) {
@@ -88,8 +73,7 @@ function withTimeout(promise, ms) {
 app.get('/health', async (req, res) => {
   const time = new Date().toISOString();
 
-  // Detect graceful-shutdown state — pool.ended is true after pool.end(),
-  // redis.status is 'end' after redis.quit().
+  // Returns 503 during graceful shutdown so monitoring sees the instance going down.
   if (pool.ended || redis.status === 'end') {
     return res.status(503).json({ status: 'shutting_down', time });
   }
@@ -110,7 +94,7 @@ app.get('/health', async (req, res) => {
     .json({ status: healthy ? 'ok' : 'degraded', time, checks });
 });
 
-// SEC7 — Global rate limit: 100 requests per minute per IP
+// 100 req/min per IP
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
@@ -121,7 +105,7 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// SEC7 — Strict rate limit for auth routes: 20 requests per 15 min
+// Tighter limit for auth endpoints: 20 req per 15 min
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -153,7 +137,7 @@ const contactLimiter = rateLimit({
   store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
 });
 
-// SEC4 — CSRF protection on all state-changing routes (csrf-csrf double-submit cookie)
+// Double-submit cookie CSRF protection
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET,
   getSessionIdentifier: () => '',
@@ -179,16 +163,14 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 }
 
-// SEC4 — expose CSRF token to frontend (generateCsrfToken sets cookie + returns token)
+// Expose CSRF token so the frontend can include it in X-CSRF-Token headers
 app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
 
-// authLimiter applied per-route rather than to the full /auth prefix:
-//   /login      → has its own loginLimiter (10/15min) in authRoutes.js
-//   /resend-otp → has its own otpLimiter   (3/30min)  in authRoutes.js
-//   /refresh    → gets refreshLimiter below; stacking authLimiter on top
-//                 would reproduce the original 429-on-page-load bug
+// authLimiter is applied per-route, not to the full /auth prefix:
+// /login and /resend-otp have their own tighter limiters in authRoutes.js;
+// /refresh gets refreshLimiter (separate budget — stacking authLimiter caused 429 on page load)
 app.use([
   '/api/v1/auth/signup',
   '/api/v1/auth/verify-email',
@@ -205,12 +187,11 @@ app.use('/api/v1/contact', doubleCsrfProtection, contactRoutes);
 app.use('/api/v1/badges', doubleCsrfProtection, badgeRoutes);
 app.use('/api/v1/admin', doubleCsrfProtection, adminRoutes);
 app.use('/api/v1/notifications', doubleCsrfProtection, notificationRoutes);
-// LAND-2 — Public stats, no CSRF/auth needed (must be before 404 handler)
+// Must be before the 404 handler
 app.use('/api/v1/public', publicRoutes);
-// DB4 — Master data (GET public, POST/PATCH admin-only via route-level auth)
 app.use('/api/v1/master', masterDataRoutes);
 
-// MON1 — Sentry error handler (must be before other error middleware)
+// Sentry error handler must be before other error middleware
 if (Sentry) {
   Sentry.setupExpressErrorHandler(app);
 }

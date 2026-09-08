@@ -12,7 +12,6 @@ export default function MyReports() {
   const navigate  = useNavigate()
   const location  = useLocation()
 
-  /* ── Data state — same endpoint as Profile.jsx ───────────────────────── */
   const [reports, setReports]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [tab, setTab]           = useState(location.state?.tab === 'resolved' ? 'resolved' : 'active')
@@ -24,7 +23,6 @@ export default function MyReports() {
   const drawerRef  = useRef(null)
   const lastFetchedRef = useRef(0)
 
-  /* ── Fetch: same API call used by Profile ─────────────────────────────── */
   useEffect(() => {
     client.get('/auth/my-reports')
       .then(({ data }) => {

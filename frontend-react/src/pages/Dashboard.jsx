@@ -12,7 +12,6 @@ const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
 export default function Dashboard() {
   const navigate = useNavigate()
 
-  // ── All state from original (unchanged) ────────────────────────────────
   const [reports, setReports]               = useState([])
   const [loading, setLoading]               = useState(true)
   const [newReportFlash, setNewReportFlash] = useState(null)
@@ -36,7 +35,6 @@ export default function Dashboard() {
   const [areaError, setAreaError]           = useState('')
   const [areaLoading, setAreaLoading]       = useState(false)
 
-  // ── All useEffects from original (unchanged logic) ──────────────────────
   useEffect(() => {
     client.get('/reports/all')
       .then(({ data }) => {
@@ -51,7 +49,7 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  // RT-2 — Socket.io real-time listener
+  // Socket.io real-time listener
   useEffect(() => {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     socketRef.current = io(API_URL, { withCredentials: true, auth: { token: getAccessToken() } })
@@ -176,7 +174,6 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-canvas">
 
-      {/* RT-2 — Real-time flash toast (dark-theme restyled) */}
       {newReportFlash && (
         <div
           className="fixed top-16 right-4 z-[9999] bg-elevated border border-edge rounded-2xl px-4 py-3 max-w-xs w-[calc(100vw-2rem)] flex items-center gap-3 shadow-card"
@@ -235,7 +232,6 @@ export default function Dashboard() {
             <span className="text-[17px] font-bold text-light tracking-tight">Hetusafe</span>
           </div>
 
-          {/* Notification bell (existing component — unchanged) */}
           <NotificationCenter externalCount={unreadCount} />
         </div>
       </header>
@@ -263,7 +259,6 @@ export default function Dashboard() {
           </span>
         </div>
 
-        {/* Hero heading — text-hero = 2rem/700/−0.02em tracking (from tailwind.config.js) */}
         <h1 className="text-hero text-light mb-3">
           Together, We Keep<br />
           Our City Safe
@@ -273,7 +268,6 @@ export default function Dashboard() {
           safer — in real time.
         </p>
 
-        {/* CTA — sole hero action (FAB handles report submission app-wide) */}
         <div className="mb-10">
           <Button
             variant="primary"

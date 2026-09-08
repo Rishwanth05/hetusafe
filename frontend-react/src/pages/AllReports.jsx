@@ -6,7 +6,6 @@ import NotificationCenter from '../components/NotificationCenter'
 import { Button, BottomNav, Card, PriorityBadge, AppDrawer } from '../components/ui'
 import { useAutoLocation } from '../hooks/useAutoLocation'
 
-/* ── Helpers (kept exactly from Results.jsx) ─────────────────────────────── */
 const severityColor = {
   low:      { bg: '#dcfce7', text: '#16a34a' },
   medium:   { bg: '#fef9c3', text: '#ca8a04' },
@@ -22,7 +21,6 @@ const badgeConfig = {
   Newcomer: { bg: '#f1f5f9', color: '#94a3b8', icon: ''   },
 }
 
-/* ── Sub-components (moved as-is from Results.jsx) ───────────────────────── */
 
 function ReporterBadge({ name, badge_tier, trust_score }) {
   if (!name) return null

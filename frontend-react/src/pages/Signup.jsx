@@ -10,7 +10,6 @@ export default function Signup() {
   const { login } = useAuth()
   const navigate  = useNavigate()
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [step, setStep]                   = useState('details') // 'details' | 'otp'
   const [form, setForm]                   = useState({ name: '', email: '', password: '' })
   const [otp, setOtp]                     = useState('')
@@ -19,7 +18,6 @@ export default function Signup() {
   const [resendCooldown, setResendCooldown] = useState(0)
   const [showPassword, setShowPassword]   = useState(false)
 
-  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const startCooldown = () => {
     setResendCooldown(60)
     const t = setInterval(() => {

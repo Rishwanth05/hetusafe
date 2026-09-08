@@ -54,7 +54,6 @@ export function AuthProvider({ children }) {
     const savedRefreshToken = localStorage.getItem('refreshToken')
     const savedAccessToken = getAccessToken()
 
-    // Clear local state immediately so the UI reflects logged-out status
     setAccessToken(null)
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
