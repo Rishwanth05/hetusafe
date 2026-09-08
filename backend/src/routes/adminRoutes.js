@@ -136,23 +136,32 @@ router.delete('/users/:id', async (req, res, next) => {
 
 // ── CHANGE USER ROLE ───────────────────────────────────────────────────────────
 router.put('/users/:id/role', async (req, res, next) => {
-  try {
-    const { role } = req.body;
-    if (!['user', 'admin'].includes(role))
-      return res.status(400).json({ message: 'Invalid role' });
+  const { role } = req.body;
+  if (!['user', 'admin'].includes(role))
+    return res.status(400).json({ message: 'Invalid role' });
 
-    const before = await pool.query('SELECT role FROM users WHERE id = $1', [req.params.id]);
-    await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, req.params.id]);
-    await pool.query(
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const before = await client.query('SELECT role FROM users WHERE id = $1', [req.params.id]);
+    await client.query('UPDATE users SET role = $1 WHERE id = $2', [role, req.params.id]);
+    await client.query(
       `INSERT INTO admin_audit_log (admin_id, admin_email, action, target_type, target_id, old_value, new_value)
        VALUES ($1, $2, 'change_user_role', 'user', $3, $4, $5)`,
       [req.user.id, req.user.email, req.params.id,
        JSON.stringify({ role: before.rows[0]?.role }),
        JSON.stringify({ role })]
     );
+
+    await client.query('COMMIT');
     res.json({ message: 'Role updated ✅' });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     next(err);
+  } finally {
+    if (client) client.release();
   }
 });
 

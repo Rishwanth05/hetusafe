@@ -143,6 +143,16 @@ const refreshLimiter = rateLimit({
   store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
 });
 
+// Contact form: low-frequency user action — 5 submissions per 15 min per IP.
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many contact requests. Please try again later.' },
+  store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
+});
+
 // SEC4 — CSRF protection on all state-changing routes (csrf-csrf double-submit cookie)
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET,
@@ -188,6 +198,7 @@ app.use([
   '/api/v1/auth/logout',
 ], authLimiter);
 app.post('/api/v1/auth/refresh', refreshLimiter);
+app.post('/api/v1/contact/send', contactLimiter);
 app.use('/api/v1/auth', doubleCsrfProtection, authRoutes);
 app.use('/api/v1/reports', doubleCsrfProtection, reportRoutes);
 app.use('/api/v1/contact', doubleCsrfProtection, contactRoutes);

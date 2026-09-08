@@ -199,15 +199,19 @@ router.get("/all", verifyToken, async (req, res, next) => {
       try {
         const lock = await redis.set('lock:reports:all', '1', 'NX', 'EX', 10);
         if (!lock) {
-          // Another request is rebuilding — poll the cache for up to 2 s
-          for (let i = 0; i < 20; i++) {
-            await new Promise(r => setTimeout(r, 100));
+          // Another request is rebuilding — wait with exponential backoff.
+          // 5 attempts × [50, 100, 200, 400, 500ms] = ~1.25s max wait, 75%
+          // fewer Redis GETs than the previous 20×100ms constant poll.
+          let delay = 50;
+          for (let i = 0; i < 5; i++) {
+            await new Promise(r => setTimeout(r, delay));
             try {
               const polled = await getCache('reports:all');
               if (polled) return res.json(polled);
             } catch {}
+            delay = Math.min(delay * 2, 500);
           }
-          // Safety valve: fall through and hit the DB ourselves
+          // Safety valve: lock holder is taking too long — fall through and rebuild
         }
       } catch {}
     }

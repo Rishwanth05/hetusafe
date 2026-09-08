@@ -294,6 +294,34 @@ describe('GET /api/v1/reports/all', () => {
       .set('Authorization', `Bearer ${accessToken}`);
     expect(res.status).toBe(400);
   });
+
+  test('concurrent first-page requests all return the same payload (single-flight lock)', async () => {
+    const { accessToken } = await createVerifiedUser();
+    await postReport(accessToken);
+
+    // Evict any warm cache so all requests hit the lock path simultaneously
+    await redis.del('reports:all');
+    await redis.del('lock:reports:all');
+
+    // 5 concurrent GET /all — first acquires the lock and rebuilds; others wait
+    // via the exponential backoff loop and read the populated cache
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        agent
+          .get('/api/v1/reports/all')
+          .set('Authorization', `Bearer ${accessToken}`)
+      )
+    );
+
+    results.forEach(res => expect(res.status).toBe(200));
+
+    const refIds = results[0].body.reports.map(r => r.id).sort();
+    const refCursor = results[0].body.nextCursor;
+    results.slice(1).forEach(res => {
+      expect(res.body.reports.map(r => r.id).sort()).toEqual(refIds);
+      expect(res.body.nextCursor).toBe(refCursor);
+    });
+  });
 });
 
 // ── Vote (confirmed / disputed) ───────────────────────────────────────────────
