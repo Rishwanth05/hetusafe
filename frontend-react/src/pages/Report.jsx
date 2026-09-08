@@ -219,7 +219,7 @@ export default function Report() {
 
   useEffect(() => {
     const CACHE_KEY = 'master:categories'
-    const TTL = 60 * 60 * 1000
+    const TTL = 5 * 60 * 1000
     try {
       const cached = localStorage.getItem(CACHE_KEY)
       if (cached) {
