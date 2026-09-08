@@ -210,6 +210,7 @@ export default function Report() {
   const [error, setError]           = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [gpsLoading, setGpsLoading] = useState(false)
+  const [gpsStatus, setGpsStatus]   = useState(null) // null | 'denied' | 'error'
   const [step, setStep]             = useState(1)
   const [duplicateWarning, setDuplicateWarning] = useState(null)
 
@@ -255,6 +256,8 @@ export default function Report() {
 
   const handleGPS = () => {
     setGpsLoading(true)
+    setGpsStatus(null)
+    setError('')
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setForm(f => ({
@@ -266,10 +269,15 @@ export default function Report() {
         reverseGeocode(coords.latitude, coords.longitude)
         setGpsLoading(false)
       },
-      () => {
-        setError('GPS unavailable. Please enter your address or click the map.')
+      (err) => {
         setGpsLoading(false)
-      }
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsStatus('denied')
+        } else {
+          setGpsStatus('error')
+        }
+      },
+      { timeout: 10000 },
     )
   }
 
@@ -583,6 +591,19 @@ export default function Report() {
                 </>
               ) : '📍 Auto-detect My Location (GPS)'}
             </button>
+
+            {/* Inline GPS status — shown immediately below the button so it's visible without scrolling */}
+            {gpsStatus && (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-caption text-danger"
+              >
+                <span className="shrink-0 mt-px" aria-hidden="true">{gpsStatus === 'denied' ? '🔒' : '⚠️'}</span>
+                {gpsStatus === 'denied'
+                  ? 'Location access was denied — enter your address below or tap the map to pin your location'
+                  : 'GPS unavailable — enter your address below or tap the map to pin your location'}
+              </div>
+            )}
 
             {/* Divider */}
             <div className="flex items-center gap-3">
