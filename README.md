@@ -19,7 +19,7 @@ The platform persists reports to PostgreSQL and broadcasts them to connected cli
 The core service prioritizes strict data integrity and real-world edge defense:
 * **Secure Media Processing:** File signatures are inspected at the byte level before images undergo automated metadata stripping and WebP transcoding.
 * **Proximity Event Routing:** Database-level spatial distance evaluations drive targeted push fanouts without polling.
-* **Infrastructure-backed Integration Testing:** A 91-case test suite executes against live PostgreSQL and Redis service containers inside GitHub Actions — preventing in-memory mocking artifacts from reaching production.
+* **Infrastructure-backed Integration Testing:** A 186-test suite executes against live PostgreSQL and Redis service containers inside GitHub Actions — preventing in-memory mocking artifacts from reaching production.
 
 ---
 
@@ -44,7 +44,7 @@ The core service prioritizes strict data integrity and real-world edge defense:
                +-----------------------------+ +-----------------------------+
                |       PostgreSQL 15         | |       Redis 7               |
                | - Incidents & Audit Trail   | | - Access Token Blacklist    |
-               | - Haversine Geospatial Calc | | - 30s GeoJSON Query Cache   |
+               | - Haversine Geospatial Calc | | - 30s Report Query Cache    |
                | - Soft-Delete Archive Log   | | - Daily Quotas & Auth Limit |
                +-----------------------------+ +-----------------------------+
                               |                              |
@@ -66,7 +66,7 @@ When a new incident is persisted, it immediately broadcasts to active map sessio
 
 ### Spatial Distance Calculations & Targeted Alerts
 
-Push notifications use localized proximity rather than broad channel blasts. On report creation, PostgreSQL evaluates the Haversine distance between the report coordinates and stored user locations to select users within a 30-mile radius. Eligible FCM device tokens are queried in a single database pass and dispatched through the Firebase Admin SDK. The service worker handles background FCM messages when the application is not actively open in the foreground, and tapping the notification deep-links to the focused map coordinate (`/results?focus=<reportId>`). Community resolution alerts remain point-to-point, targeting only the original report owner.
+Push notifications use localized proximity rather than broad channel blasts. On report creation, PostgreSQL evaluates the Haversine distance between the report coordinates and stored user locations to select users within a 30-mile radius. Eligible FCM device tokens are queried in a single database pass and dispatched through the Firebase Admin SDK in batches of up to 500 tokens per call (the API limit). The service worker handles background FCM messages when the application is not actively open in the foreground, and tapping the notification deep-links to the focused map coordinate (`/results?focus=<reportId>`). Community resolution alerts remain point-to-point, targeting only the original report owner.
 
 ### Secure Media Processing
 
@@ -78,7 +78,7 @@ Uploads pass through three validation and normalization stages before reaching S
 
 ### Session Termination via Token Blacklist
 
-To retain short-lived stateless access tokens while supporting immediate logout, the application uses 15-minute JWT access tokens paired with rotating 7-day refresh tokens stored in PostgreSQL. On logout, the access token is added to a Redis blacklist with a fixed 900-second TTL — equal to its full lifetime — so it cannot be reused even if intercepted after logout. Inbound requests check this in-memory blacklist, allowing session termination without a database roundtrip on every request.
+To retain short-lived stateless access tokens while supporting immediate logout, the application uses 15-minute JWT access tokens paired with rotating 7-day refresh tokens stored in PostgreSQL. On logout or password change, the access token is added to a Redis blacklist keyed by token value — so it cannot be reused even if intercepted. Socket.io connections go through the same blacklist check at handshake time, using the same fail-open behavior: a Redis outage lets valid connections through rather than dropping all connected clients.
 
 ### Atomic Self-Deletion & Moderation Lifecycle
 
@@ -91,13 +91,14 @@ Report owners can delete their submission within a 6-hour window. To prevent orp
 
 ### Redis Operational Responsibilities
 
-Redis isolates five distinct concerns into dedicated key namespaces with independent expiration policies:
+Redis isolates six distinct concerns into dedicated key namespaces with independent expiration policies:
 
 * **Global Rate Limiting:** 100 req/min per IP.
-* **Auth Protection:** 20 req/15 min per IP; 5 failed login attempts enforce a 30-minute lockout.
-* **Quota Counters:** Maximum 5 reports per user/day via dynamic date keys (`user:<id>:reports:<YYYY-MM-DD>`).
-* **Active Cache:** 30-second TTL for map incidents.
-* **Token Blacklist:** Fixed 900-second TTL, equal to the access token's full lifetime.
+* **Auth Protection:** 20 req/15 min per IP on auth endpoints; 5 failed login attempts enforce a 30-minute lockout.
+* **Contact Form Limiting:** 5 req/15 min per IP on the contact submission endpoint.
+* **Quota Counters:** Maximum 5 reports per user/day via dynamic date keys (`daily_reports:<userId>:<YYYY-MM-DD>`).
+* **Active Cache:** 30-second TTL for the map incident feed; 60-second TTL for public stats.
+* **Token Blacklist:** TTL matched to the remaining access token lifetime on logout and password change.
 
 ---
 
@@ -141,6 +142,30 @@ cp frontend-react/.env.example frontend-react/.env
 
 > **Security Note:** Do not commit `.env` files. In production, configure secrets through container environment variables or your cloud secret provider.
 
+**Backend environment variables** (`backend/.env.example`):
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | HTTP server port |
+| `DB_DEV_URL` / `DB_PROD_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | Access token signing key |
+| `CSRF_SECRET` | CSRF double-submit secret |
+| `REDIS_URL` | Redis connection string |
+| `FRONTEND_URL` | Allowed CORS origin(s), comma-separated |
+| `SENDGRID_API_KEY` / `SENDGRID_FROM` / `SENDGRID_TO` | Email delivery |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | Firebase Admin SDK service account JSON |
+| `S3_BUCKET_NAME` / `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 image storage |
+| `SENTRY_DSN` | Error monitoring (optional) |
+
+**Frontend environment variables** (`frontend-react/.env.example`):
+
+| Variable | Purpose |
+|---|---|
+| `VITE_API_URL` | Backend base URL |
+| `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_AUTH_DOMAIN` / `VITE_FIREBASE_PROJECT_ID` / `VITE_FIREBASE_MESSAGING_SENDER_ID` / `VITE_FIREBASE_APP_ID` / `VITE_FIREBASE_VAPID_KEY` | Firebase client config |
+| `VITE_SENTRY_DSN` | Frontend error monitoring (optional) |
+| `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` | Analytics (optional) |
+
 ### 3. Run Database Migrations
 
 Apply schemas and sequential migration scripts:
@@ -175,7 +200,7 @@ The interface will be live at `http://localhost:5173`.
 
 ## Automated Testing & CI
 
-91 integration tests run against live PostgreSQL 15 and Redis 7 service containers on every push and pull request to `master` — so database and Redis integration behavior is exercised in CI.
+186 integration tests run against live PostgreSQL 15 and Redis 7 service containers on every push and pull request to `master` — so database and Redis integration behavior is exercised in CI.
 
 ```bash
 cd backend
@@ -189,15 +214,16 @@ npm run test:coverage
 
 ### Test Scope
 
-* **`auth.test.js` (28 tests):** Dual-step OTP verification, refresh token rotation, lockout escalations, and Redis revocation checks.
-* **`reports.test.js` (24 tests):** Magic-byte verification, spatial deduplication checks, trust delta calculation, and atomic 6-hour deletion mechanics.
-* **`admin.test.js` (39 tests):** Role-based access gates, double-submit CSRF enforcement, rate-limit thresholds, and audit logging.
+* **`auth.test.js` (63 tests):** Dual-step OTP verification, refresh token rotation, password change and reset flows, lockout escalation, Redis revocation, and access-token blacklist checks including the post-password-change case.
+* **`reports.test.js` (53 tests):** Magic-byte verification, spatial deduplication, trust score deltas, cursor pagination, concurrent cache-miss handling, and atomic 6-hour deletion mechanics.
+* **`admin.test.js` (44 tests):** Role-based access gates, double-submit CSRF enforcement, rate-limit thresholds, and audit logging.
+* **Additional suites (26 tests):** Health endpoint dependency checks, Socket.io JWT authentication and blacklist enforcement, request body size limits, startup env-var validation, graceful-shutdown sequencing, and slow-query instrumentation.
 
 ---
 
 ## Deployment Pipeline
 
-* **Continuous Integration:** Every commit to `master` triggers the 91-test integration suite inside isolated container runners.
+* **Continuous Integration:** Every commit to `master` triggers the 186-test integration suite inside isolated container runners.
 * **Build Gate:** Passing test steps trigger the production bundle compilation (`vite build`).
 * **Continuous Delivery:** After a successful build, the deployment workflow triggers the Render deploy hook for the backend service.
 
