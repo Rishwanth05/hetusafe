@@ -409,6 +409,19 @@ describe('POST /api/v1/auth/logout', () => {
 
     expect(res.status).toBe(401);
   });
+
+  test('Redis error during blacklist check does not block a valid token (fail-open)', async () => {
+    const { body: { accessToken } } = await createVerifiedUser();
+
+    jest.spyOn(redis, 'get').mockRejectedValueOnce(new Error('Redis connection error'));
+
+    const res = await agent
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    jest.restoreAllMocks();
+    expect(res.status).toBe(200);
+  });
 });
 
 // ── Forgot / Reset Password ───────────────────────────────────────────────────
