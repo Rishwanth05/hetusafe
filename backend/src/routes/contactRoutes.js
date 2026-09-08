@@ -41,11 +41,16 @@ router.post("/send", async (req, res) => {
       `Subject: ${safeSubject}\n\n` +
       `Message:\n${message}\n`;
 
-    const safeHtmlMessage = String(message)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br/>");
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    const safeHtmlName    = escapeHtml(name);
+    const safeHtmlSubject = escapeHtml(safeSubject);
+    const safeHtmlMessage = escapeHtml(message).replace(/\n/g, "<br/>");
 
     const payload = {
       to,
@@ -56,9 +61,9 @@ router.post("/send", async (req, res) => {
       html: `
         <div style="font-family: Arial, sans-serif; line-height:1.5">
           <h2 style="margin:0 0 10px">Hetusafe Contact Message</h2>
-          <p><b>Name:</b> ${name}</p>
+          <p><b>Name:</b> ${safeHtmlName}</p>
           <p><b>Email:</b> ${email}</p>
-          <p><b>Subject:</b> ${safeSubject}</p>
+          <p><b>Subject:</b> ${safeHtmlSubject}</p>
           <hr style="margin:14px 0"/>
           <p><b>Message:</b></p>
           <div style="background:#f6f7fb; padding:12px; border-radius:10px">
