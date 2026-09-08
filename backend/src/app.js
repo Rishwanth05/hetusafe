@@ -49,7 +49,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '50kb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
