@@ -63,7 +63,8 @@ router.get('/stats', async (req, res, next) => {
 // ── ALL USERS ──────────────────────────────────────────────────────────────────
 router.get('/users', async (req, res, next) => {
   try {
-    const { search, page = 1, limit = 20 } = req.query;
+    const { search, page = 1 } = req.query;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
 
     const params = [];
@@ -158,7 +159,8 @@ router.put('/users/:id/role', async (req, res, next) => {
 // ── ALL REPORTS ────────────────────────────────────────────────────────────────
 router.get('/reports', async (req, res, next) => {
   try {
-    const { status, severity, search, page = 1, limit = 20 } = req.query;
+    const { status, severity, search, page = 1 } = req.query;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const params = [];
     const conditions = [];
@@ -382,7 +384,8 @@ router.post('/broadcast', validate(broadcastSchema), async (req, res, next) => {
 // ── AUDIT LOG ──────────────────────────────────────────────────────────────────
 router.get('/audit-log', async (req, res, next) => {
   try {
-    const { limit = 100, offset = 0 } = req.query;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const { offset = 0 } = req.query;
     const result = await pool.query(
       `SELECT id, admin_id, admin_email, action, target_type, target_id,
               old_value, new_value, created_at
