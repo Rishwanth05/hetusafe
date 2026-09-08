@@ -67,7 +67,6 @@ export default function Alerts() {
     return () => clearInterval(id)
   }, [])
 
-  /* ── Handlers (same logic as NotificationCenter) ─────────────────────── */
   async function handleDelete(id) {
     try {
       await client.delete(`/notifications/${id}`)

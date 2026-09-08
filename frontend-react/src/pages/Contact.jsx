@@ -12,7 +12,6 @@ export default function Contact() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [form, setForm]     = useState({ name: user?.name || '', email: '', subject: '', message: '' })
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
@@ -42,7 +41,6 @@ export default function Contact() {
     return () => clearInterval(id)
   }, [])
 
-  /* ── Form submission handler (unchanged) ─────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)

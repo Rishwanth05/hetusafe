@@ -10,20 +10,17 @@ export default function ResetPassword() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [form, setForm]       = useState({ new_password: '', confirm_password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
 
-  /* ── All existing effects (unchanged) ────────────────────────────────── */
   useEffect(() => {
     if (!token) {
       setError('Invalid or missing reset token. Please request a new link.')
     }
   }, [token])
 
-  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleSubmit = async () => {
     if (!form.new_password || !form.confirm_password) { setError('Both fields required'); return }
     if (form.new_password.length < 8) { setError('Password must be at least 8 characters'); return }

@@ -13,7 +13,6 @@ export default function Leaderboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [leaders, setLeaders]   = useState([])
   const [myBadges, setMyBadges] = useState({ stats: null, badges: [] })
   const [loading, setLoading]   = useState(true)
@@ -25,7 +24,6 @@ export default function Leaderboard() {
   const navMenuRef = useRef(null)
   const drawerRef  = useRef(null)
 
-  /* ── All existing useEffects (unchanged) ─────────────────────────────── */
   useEffect(() => {
     Promise.all([
       client.get('/badges/leaderboard'),
@@ -56,7 +54,6 @@ export default function Leaderboard() {
     return () => clearInterval(id)
   }, [])
 
-  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleLogout = () => { logout(); navigate('/login') }
   const initials = (user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 

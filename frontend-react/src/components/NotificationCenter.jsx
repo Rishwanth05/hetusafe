@@ -60,7 +60,7 @@ export default function NotificationCenter({ unreadCount: externalCount, onMarkR
 
   return (
     <>
-      {/* ── Amber alert toast (kept — fires on new hazards even without the dropdown) ── */}
+      {/* ── Amber alert toast ── */}
       {toast && (
         <div style={{
           position: 'fixed', top: '72px', left: '50%',
@@ -99,7 +99,6 @@ export default function NotificationCenter({ unreadCount: externalCount, onMarkR
         </div>
       )}
 
-      {/* ── Bell button — navigates to /alerts ───────────────────────────── */}
       <button
         onClick={() => navigate('/alerts')}
         aria-label={`Notifications${displayCount > 0 ? `, ${displayCount} unread` : ''}`}

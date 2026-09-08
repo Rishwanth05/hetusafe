@@ -133,7 +133,6 @@ const EMERGENCY_BY_COUNTRY = {
 export default function Emergency() {
   const navigate = useNavigate()
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [contacts, setContacts]               = useState([])
   const [showAddContact, setShowAddContact]   = useState(false)
   const [newContact, setNewContact]           = useState({ name: '', phone: '', relation: '' })
@@ -151,7 +150,6 @@ export default function Emergency() {
   const navMenuRef = useRef(null)
   const drawerRef  = useRef(null)
 
-  /* ── All existing useEffects (unchanged) ─────────────────────────────── */
   useEffect(() => {
     client.get('/auth/emergency-contacts')
       .then(({ data }) => setContacts(data))
@@ -195,7 +193,6 @@ export default function Emergency() {
     return () => clearInterval(id)
   }, [])
 
-  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleLocationSearch = async () => {
     if (!locationSearch.trim()) return
     setLocationSearching(true)
@@ -251,7 +248,6 @@ export default function Emergency() {
     client.put('/auth/emergency-contacts', { contacts: updated }).catch(() => {})
   }
 
-  /* ── Derived values (unchanged) ─────────────────────────────────────── */
   const emergencyNumbers = selectedCountry?.numbers || EMERGENCY_BY_COUNTRY.DEFAULT.numbers
   const sosNumber        = emergencyNumbers[0]?.number || '911'
 

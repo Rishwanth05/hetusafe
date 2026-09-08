@@ -6,7 +6,6 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import client from '../api/client'
 import { Card, Button, PriorityBadge } from '../components/ui'
 
-/* ── Constants (unchanged from original) ────────────────────────────────── */
 const HAZARD_TYPES_FALLBACK = [
   'Pothole', 'Broken Street Light', 'Flooding', 'Fallen Tree',
   'Gas Leak', 'Exposed Wire', 'Road Damage', 'Broken Sidewalk',
@@ -20,7 +19,6 @@ const SEVERITIES = [
   { value: 'critical', label: 'Critical', color: '#9333ea', bg: '#f3e8ff', desc: 'Immediate danger'        },
 ]
 
-/* ── Visual-only additions (no logic) ───────────────────────────────────── */
 const HAZARD_ICON_MAP = {
   'Pothole':               '🕳️',
   'Broken Street Light':   '💡',
@@ -47,8 +45,7 @@ const PHOTO_TIPS = [
   { icon: '👥', text: 'Avoid crowds'        },
 ]
 
-// Dark-theme Tailwind classes for each severity level.
-// The SEVERITIES array above is kept for its data (value, label, desc).
+// Visual classes for each severity level (SEVERITIES above provides labels/desc).
 const SEV_STYLE = {
   low:      { active: 'border-accent bg-accent/10',     text: 'text-accent'    },
   medium:   { active: 'border-warn bg-warn/10',         text: 'text-warn'      },
@@ -56,7 +53,6 @@ const SEV_STYLE = {
   critical: { active: 'border-[#9333ea] bg-[#9333ea]/10', text: 'text-[#9333ea]' },
 }
 
-/* ── LocationMap — byte-for-byte identical to original ───────────────────── */
 function LocationMap({ lat, lng, onLocationSelect }) {
   const mapContainer = useRef(null)
   const mapRef = useRef(null)
@@ -202,7 +198,6 @@ export default function Report() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  /* ── All state from original (unchanged) ──────────────────────────────── */
   const [categories, setCategories] = useState(HAZARD_TYPES_FALLBACK)
   const [form, setForm] = useState({
     hazard_type: '', severity: '', description: '',
@@ -222,7 +217,6 @@ export default function Report() {
   const [submitted, setSubmitted]   = useState(false)
   const [submittedId, setSubmittedId] = useState(null)
 
-  /* ── All useEffects from original (unchanged) ─────────────────────────── */
   useEffect(() => {
     const CACHE_KEY = 'master:categories'
     const TTL = 60 * 60 * 1000
@@ -244,7 +238,6 @@ export default function Report() {
       .catch(() => setCategories(HAZARD_TYPES_FALLBACK))
   }, [])
 
-  /* ── All handlers from original (unchanged) ──────────────────────────── */
   const reverseGeocode = async (lat, lng) => {
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
@@ -318,14 +311,10 @@ export default function Report() {
     if (file) { setImage(file); setImagePreview(URL.createObjectURL(file)) }
   }
 
-  // handleSubmit: API call is byte-for-byte identical to the original.
-  // The only change is capturing the response to populate the success screen
-  // instead of immediately navigating away.
   const handleSubmit = async () => {
     if (!form.latitude || !form.longitude) { setError('Please set a location'); return }
     if (!image) { setError('Please upload a photo before submitting'); return }
 
-    // DUP1 — check for duplicate before submitting
     if (!duplicateWarning) {
       const isDup = await checkDuplicate(form.latitude, form.longitude, form.hazard_type)
       if (isDup) return
@@ -801,7 +790,7 @@ export default function Report() {
               </div>
             </Card>
 
-            {/* DUP1 — Duplicate warning */}
+            {/* Duplicate warning */}
             {duplicateWarning && (
               <div className="bg-warn/10 border border-warn/30 rounded-2xl p-4">
                 <p className="text-body text-warn font-bold mb-1">⚠️ Similar report already exists</p>

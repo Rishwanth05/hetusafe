@@ -1,4 +1,4 @@
-// MON1 — Sentry must initialise before React
+// Sentry must initialise before React
 import * as Sentry from '@sentry/react'
 
 if (import.meta.env.VITE_SENTRY_DSN) {
@@ -10,7 +10,6 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   })
 }
 
-// MON2 — PostHog analytics
 import posthog from 'posthog-js'
 
 if (import.meta.env.VITE_POSTHOG_KEY) {
@@ -37,4 +36,3 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>
 )
-// Fri Jun 12 15:13:26 CDT 2026

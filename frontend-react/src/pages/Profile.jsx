@@ -23,7 +23,6 @@ export default function Profile() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
 
-  /* ── All existing state (unchanged) ──────────────────────────────────── */
   const [profile, setProfile] = useState(null)
   const [myReports, setMyReports] = useState([])
   const [loading, setLoading] = useState(true)
@@ -54,7 +53,6 @@ export default function Profile() {
   const navMenuRef = useRef(null)
   const drawerRef  = useRef(null)
 
-  /* ── All existing useEffects (unchanged) ─────────────────────────────── */
   useEffect(() => {
     Promise.all([
       client.get('/auth/me'),
@@ -88,7 +86,6 @@ export default function Profile() {
     return () => clearInterval(id)
   }, [])
 
-  /* ── All existing handlers (unchanged) ──────────────────────────────── */
   const handleUpdateName = async () => {
     if (!newName.trim()) return
     setNameLoading(true); setNameMsg('')
@@ -150,7 +147,6 @@ export default function Profile() {
     }
   }
 
-  /* ── Derived values (unchanged) ─────────────────────────────────────── */
   const initials       = (profile?.name || user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
   const totalReports   = myReports.length
   const resolvedReports = myReports.filter(r => r.status === 'resolved').length
