@@ -4,6 +4,19 @@
 
 Hetusafe handles real user data including GPS coordinates, photographs, and account credentials. We take vulnerability reports seriously and appreciate responsible disclosure.
 
+## Implemented Protections
+
+These controls are already in place. Reports about bypasses, implementation flaws, or gaps are still welcome — the presence of a control doesn't mean it's implemented correctly everywhere.
+
+- **Authentication:** Two-factor login via OTP email. Access tokens are short-lived JWTs; refresh tokens are stored server-side and rotated on use.
+- **Session revocation:** Logout and password changes immediately blacklist the access token in Redis. WebSocket connections go through the same blacklist check on handshake.
+- **Rate limiting:** Auth endpoints, the login path, OTP resend, and the contact form all have per-IP rate limits backed by Redis.
+- **Input validation:** All request bodies are validated with Zod schemas before handlers run. Request body size is capped. XSS-prone fields are sanitised before storage.
+- **Media handling:** Uploaded images are validated by magic bytes (not the Content-Type header), stripped of all metadata, and re-encoded before reaching object storage.
+- **CSRF:** State-changing routes require a double-submit cookie CSRF token.
+- **Privilege escalation:** Admin routes enforce both JWT authentication and role verification on every request.
+- **SQL injection:** All database queries use parameterised statements via the `pg` driver.
+
 ## Reporting a Vulnerability
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
