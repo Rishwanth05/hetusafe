@@ -133,7 +133,7 @@ async function updateTrustScore(client, userId, delta) {
      RETURNING trust_score`,
     [delta, userId]
   )
-  const score = result.rows[0]?.trust_score || 100
+  const score = result.rows[0]?.trust_score ?? 100
   const tier =
     score >= 800 ? 'Hero' :
     score >= 600 ? 'Guardian' :
