@@ -51,8 +51,9 @@ export default function MyReports() {
 
   /* ── Persist selected tab into location.state so a hard refresh lands on the same tab ── */
   useEffect(() => {
+    if (location.state?.tab === tab) return
     navigate(location.pathname, { state: { ...location.state, tab }, replace: true })
-  }, [tab])
+  }, [tab, location.pathname, location.state, navigate])
 
   useEffect(() => {
     if (!menuOpen) return
