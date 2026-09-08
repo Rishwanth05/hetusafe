@@ -18,7 +18,6 @@ function appendLog(message) {
 }
 
 function startCleanupJob() {
-  // Runs at minute 0 of every hour: 0 * * * *
   cron.schedule('0 * * * *', async () => {
     try {
       const result = await pool.query(

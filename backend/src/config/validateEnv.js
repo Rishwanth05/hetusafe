@@ -1,12 +1,7 @@
 'use strict';
 
-// Startup env-var validation.
-//
-// Called once in server.js before any other module is loaded. Hard-required
-// variables cause an immediate process.exit(1) so misconfigured deploys fail
-// fast and loud (on Render this triggers a failed-deploy alert and keeps the
-// previous version live). Soft-required variables emit a console.warn but let
-// the app start — those features degrade gracefully at request time.
+// Called once at startup before any other module loads. Hard-required vars
+// exit immediately on missing; soft-required emit a warning and degrade at request time.
 
 function validateEnv() {
   const missing = [];
@@ -15,9 +10,8 @@ function validateEnv() {
   if (!process.env.JWT_SECRET)  missing.push('JWT_SECRET');
   if (!process.env.CSRF_SECRET) missing.push('CSRF_SECRET');
 
-  // Database: one valid config must exist for the active environment.
-  // Production expects DB_PROD_URL or DATABASE_URL (Render's injected var).
-  // Dev/test expects DB_DEV_URL or the individual component vars.
+  // At least one DB config must exist: DB_PROD_URL/DATABASE_URL in production,
+  // DB_DEV_URL or host component vars in dev/test.
   const isProd = process.env.NODE_ENV === 'production';
   const hasDb = isProd
     ? !!(process.env.DB_PROD_URL || process.env.DATABASE_URL)
@@ -41,9 +35,7 @@ function validateEnv() {
   }
 
   // ── Soft-required: absent → specific features degrade, app still starts ───
-  // Skipped in the test environment to keep test output clean
-  // (S3/AWS vars, for instance, are intentionally absent from .env.test because
-  // those SDK calls are mocked in the test suite).
+  // Skipped in test environments where external services are mocked.
   if (process.env.NODE_ENV === 'test') return;
 
   const soft = [
