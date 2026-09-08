@@ -14,8 +14,7 @@ const validate = require('../middleware/validate');
 
 const router = express.Router();
 
-// Shared coordinate fields. /create sends multipart (lat/lng arrive as strings),
-// so z.coerce.number() is used for both routes for consistency.
+// Multipart sends lat/lng as strings, so z.coerce.number() is used for both routes.
 const latField = z.coerce
   .number({ message: 'Latitude must be a number' })
   .min(-90, 'Latitude must be between -90 and 90')
@@ -25,15 +24,13 @@ const lngField = z.coerce
   .min(-180, 'Longitude must be between -180 and 180')
   .max(180, 'Longitude must be between -180 and 180');
 
-// hazard_type is validated as a bounded string, not a static enum, because
-// categories are stored in the DB and can be extended by admins at runtime.
+// Validated as a bounded string (not enum) because categories are admin-managed at runtime.
 const hazardTypeField = z
   .string()
   .min(1, 'Hazard type is required')
   .max(100, 'Hazard type must be 100 characters or less');
 
-// user_id is deliberately absent — the handler now reads req.user.id from the
-// verified JWT instead. Zod strips any client-supplied user_id from req.body.
+// user_id is absent — it comes from req.user.id (JWT). Zod strips any client-supplied user_id.
 const createReportSchema = z.object({
   hazard_type: hazardTypeField,
   severity: z.enum(['low', 'medium', 'high', 'critical']),
@@ -47,8 +44,7 @@ const createReportSchema = z.object({
   location_method: z.string().max(20).optional(),
 });
 
-// reports.id is a PostgreSQL INTEGER (signed 32-bit, max 2 147 483 647).
-// Multipart fields arrive as strings; z.coerce converts before validating.
+// Multipart fields arrive as strings; z.coerce converts. Max matches PostgreSQL INTEGER.
 const resolveSchema = z.object({
   report_id: z.coerce
     .number()
@@ -80,18 +76,16 @@ const s3 = new S3Client({
   }
 })
 
-// Allowlist checked against magic bytes, not the client-supplied Content-Type header.
+// Checked against magic bytes, not the client-supplied Content-Type.
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
-// Buffer in memory so we can inspect bytes before anything reaches S3.
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
 })
 
-// Verifies real file type from magic bytes, re-encodes to WebP via sharp
-// (strips EXIF/GPS metadata and embedded payloads), then uploads to S3.
-// Throws with err.status = 400 on invalid type; propagates S3/sharp errors otherwise.
+// Validates magic bytes, re-encodes to WebP (strips EXIF/metadata), uploads to S3.
+// Throws with err.status = 400 on invalid type.
 async function processAndUploadImage(buffer) {
   const detected = await fileTypeFromBuffer(buffer)
 
@@ -101,11 +95,8 @@ async function processAndUploadImage(buffer) {
     throw err
   }
 
-  // Re-encode to WebP — strips all metadata and normalises output format.
-  // quality: 80 matches typical JPEG defaults while producing smaller files.
-  // Buffer.from() copies bytes out of sharp's WASM SharedArrayBuffer heap into a
-  // plain ArrayBuffer — required because AWS SDK v3 (@smithy/util-buffer-from)
-  // explicitly rejects SharedArrayBuffer when serialising the S3 request body.
+  // WebP re-encode strips all metadata. Buffer.from() is required because
+  // AWS SDK v3 rejects SharedArrayBuffer from sharp's WASM heap.
   const safeBuffer = Buffer.from(await sharp(buffer).webp({ quality: 80 }).toBuffer())
 
   const key = `uploads/${crypto.randomUUID()}.webp`
@@ -119,9 +110,7 @@ async function processAndUploadImage(buffer) {
   return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
 }
 
-// TRUST-1 — Recalculate trust score and badge tier.
-// Must be called with a transaction client (from pool.connect()), never bare pool,
-// so both writes are atomic with the surrounding operation.
+// Must be called with a transaction client, not bare pool.
 async function updateTrustScore(client, userId, delta) {
   if (typeof client.release !== 'function') {
     throw new Error('updateTrustScore requires a transaction client (pool.connect()), not bare pool');
@@ -189,7 +178,7 @@ router.get("/all", verifyToken, async (req, res, next) => {
 
     const isFirstPage = !cursorTime;
 
-    // Single-flight cache for first page only
+    // Single-flight cache: only cache the first page
     if (isFirstPage) {
       try {
         const cached = await getCache('reports:all');
@@ -199,9 +188,7 @@ router.get("/all", verifyToken, async (req, res, next) => {
       try {
         const lock = await redis.set('lock:reports:all', '1', 'NX', 'EX', 10);
         if (!lock) {
-          // Another request is rebuilding — wait with exponential backoff.
-          // 5 attempts × [50, 100, 200, 400, 500ms] = ~1.25s max wait, 75%
-          // fewer Redis GETs than the previous 20×100ms constant poll.
+          // Another request is rebuilding — wait with exponential backoff (50→500ms, 5 attempts).
           let delay = 50;
           for (let i = 0; i < 5; i++) {
             await new Promise(r => setTimeout(r, delay));
@@ -211,7 +198,7 @@ router.get("/all", verifyToken, async (req, res, next) => {
             } catch {}
             delay = Math.min(delay * 2, 500);
           }
-          // Safety valve: lock holder is taking too long — fall through and rebuild
+          // Lock holder is taking too long — fall through and rebuild
         }
       } catch {}
     }
@@ -380,9 +367,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
       }
     }
 
-    // Wrap the core writes in a transaction: report insert, trust score update,
-    // and location update must all succeed together or all be rolled back.
-    // Notifications and FCM are fire-and-forget and remain outside the transaction.
+    // Insert, trust score, and location update are in a transaction; notifications are fire-and-forget.
     let txClient;
     let newReport;
     try {
@@ -399,7 +384,6 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
       );
       newReport = result.rows[0];
 
-      // TRUST-1 — +10 points for submitting a report
       await updateTrustScore(txClient, userId, 10);
 
       // Update reporter's last known location so future FCM broadcasts can radius-filter them
@@ -441,10 +425,7 @@ router.post("/create", verifyToken, dailyReportLimit, (req, res, next) => {
       ]
     ).catch(err => console.error('Notification insert failed:', err.message))
 
-    // FCM — notify users within 30 miles of the hazard (fire and forget)
-    // Uses Haversine formula (3959 = Earth radius in miles).
-    // LEAST(1, ...) guards against floating-point rounding above 1 that would make acos return NaN.
-    // Users with no last_lat/last_lng (never submitted a report) are excluded.
+    // Notify nearby users via FCM (within 30 miles). LEAST(1,...) prevents acos(NaN) on rounding.
     pool.query(
       `SELECT fcm_token
        FROM users
@@ -513,9 +494,7 @@ router.post("/resolve", verifyToken, (req, res, next) => {
       return res.status(err.status || 400).json({ error: err.message })
     }
 
-    // Wrap the core writes in a transaction: status update, history record, and
-    // trust score update must all succeed together or all be rolled back.
-    // Notifications and FCM are fire-and-forget and remain outside the transaction.
+    // Status, history, and trust score update are in a transaction; notifications are fire-and-forget.
     let resolveTxClient;
     try {
       resolveTxClient = await pool.connect();
@@ -532,7 +511,6 @@ router.post("/resolve", verifyToken, (req, res, next) => {
         [report_id, proof_url]
       );
 
-      // TRUST-1 — +25 points for resolving a report
       if (report.user_id) {
         await updateTrustScore(resolveTxClient, report.user_id, 25);
       }
@@ -547,8 +525,6 @@ router.post("/resolve", verifyToken, (req, res, next) => {
 
     try { await redis.del('reports:all'); } catch {}
 
-    // Notify the original reporter that their report has been resolved.
-    // user_id targets only the report owner; other users do not see this notification.
     const ownerId    = report.user_id    || null
     const hazardType = report.hazard_type || 'Hazard'
     if (ownerId) {
@@ -565,7 +541,6 @@ router.post("/resolve", verifyToken, (req, res, next) => {
         ]
       ).catch(err => console.error('Resolution notification insert failed:', err.message))
 
-      // FCM — push the reporter so they get an OS notification even when the app is closed
       pool.query(
         'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
         [ownerId]
@@ -586,7 +561,7 @@ router.post("/resolve", verifyToken, (req, res, next) => {
   }
 });
 
-// DUP1 — Duplicate detection: check 50m radius + same category + 24hr window
+// Duplicate detection: 50m radius + same category + 24hr window
 router.post("/check-duplicate", verifyToken, validate(checkDuplicateSchema), async (req, res, next) => {
   try {
     const { latitude, longitude, hazard_type } = req.body
@@ -626,7 +601,6 @@ router.delete('/:id', verifyToken, async (req, res, next) => {
   const reportId = parseInt(req.params.id, 10)
   if (isNaN(reportId)) return res.status(400).json({ message: 'Invalid report ID' })
 
-  // Read-only checks before acquiring a transaction client
   let rows
   try {
     ;({ rows } = await pool.query('SELECT * FROM reports WHERE id = $1', [reportId]))
@@ -745,5 +719,4 @@ router.post('/:id/vote', verifyToken, async (req, res, next) => {
 });
 
 module.exports = router;
-// Exported for contract-enforcement testing only — not part of the public API.
 router._updateTrustScore = updateTrustScore;

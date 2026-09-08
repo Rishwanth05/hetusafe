@@ -81,7 +81,7 @@ router.post("/send", async (req, res) => {
       response?.headers?.["X-Message-Id"] ||
       null;
 
-    //  We only say success if SendGrid accepted it
+    // Only report success if SendGrid accepted (202)
     if (acceptStatus !== 202) {
       return res.status(500).json({
         message: "SendGrid did not accept the email",
