@@ -24,7 +24,7 @@ function startCleanupJob() {
       const result = await pool.query(
         `DELETE FROM notifications
          WHERE created_at < NOW() - INTERVAL '24 hours'
-           AND deleted_at IS NULL
+            OR (deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '24 hours')
          RETURNING id`
       );
       appendLog(`Deleted ${result.rowCount} notifications older than 24h`);
