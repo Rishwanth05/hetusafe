@@ -21,10 +21,15 @@ export default function NotificationCenter({ unreadCount: externalCount, onMarkR
 
   const displayCount = externalCount !== undefined ? externalCount : internalUnread
 
+  // Keep a ref so fetchUnread always sees the current externalCount value
+  // without the interval needing to be torn down and recreated on every render.
+  const externalCountRef = useRef(externalCount)
+  useEffect(() => { externalCountRef.current = externalCount }, [externalCount])
+
   // Only poll internally when the parent isn't supplying externalCount
   useEffect(() => {
     fetchUnread()
-    if (externalCount === undefined) {
+    if (externalCountRef.current === undefined) {
       const interval = setInterval(fetchUnread, 20000)
       return () => {
         clearInterval(interval)
@@ -38,7 +43,7 @@ export default function NotificationCenter({ unreadCount: externalCount, onMarkR
       const { data } = await client.get('/notifications/unread-count')
       const count = data.count ?? 0
       // Show toast on new arrivals (standalone mode only)
-      if (externalCount === undefined && count > prevUnread.current && prevUnread.current !== null) {
+      if (externalCountRef.current === undefined && count > prevUnread.current && prevUnread.current !== null) {
         const { data: notifs } = await client.get('/notifications')
         if (notifs.length > 0) showToast(notifs[0])
       }

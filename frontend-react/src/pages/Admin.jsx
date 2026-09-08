@@ -105,38 +105,58 @@ export default function Admin() {
   }
 
   const loadUsers = async () => {
-    const { data } = await client.get(`/admin/users?search=${search}&limit=50`)
-    setUsers(data.users)
-    setTotalUsers(data.total)
+    try {
+      const { data } = await client.get(`/admin/users?search=${search}&limit=50`)
+      setUsers(data.users)
+      setTotalUsers(data.total)
+    } catch { /* silently fail */ }
   }
 
   const loadReports = async () => {
-    const params = new URLSearchParams({ limit: 50, ...reportFilter }).toString()
-    const { data } = await client.get(`/admin/reports?${params}`)
-    setReports(data.reports)
-    setTotalReports(data.total)
+    try {
+      const params = new URLSearchParams({ limit: 50, ...reportFilter }).toString()
+      const { data } = await client.get(`/admin/reports?${params}`)
+      setReports(data.reports)
+      setTotalReports(data.total)
+    } catch { /* silently fail */ }
   }
 
   const deleteUser = async (id) => {
     if (!confirm('Permanently delete this user?')) return
-    await client.delete(`/admin/users/${id}`)
-    loadUsers()
+    try {
+      await client.delete(`/admin/users/${id}`)
+      loadUsers()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Delete failed')
+    }
   }
 
   const changeRole = async (id, role) => {
-    await client.put(`/admin/users/${id}/role`, { role })
-    loadUsers()
+    try {
+      await client.put(`/admin/users/${id}/role`, { role })
+      loadUsers()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Role update failed')
+    }
   }
 
   const updateReportStatus = async (id, status) => {
-    await client.put(`/admin/reports/${id}/status`, { status })
-    loadReports()
+    try {
+      await client.put(`/admin/reports/${id}/status`, { status })
+      loadReports()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Status update failed')
+    }
   }
 
   const deleteReport = async (id) => {
     if (!confirm('Permanently delete this report?')) return
-    await client.delete(`/admin/reports/${id}`)
-    loadReports()
+    try {
+      await client.delete(`/admin/reports/${id}`)
+      loadReports()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Delete failed')
+    }
   }
 
   const archiveReport = async (id) => {
@@ -159,10 +179,14 @@ export default function Admin() {
 
   const sendBroadcast = async () => {
     if (!broadcast.title || !broadcast.message) return
-    await client.post('/admin/broadcast', broadcast)
-    setBroadcastMsg('✅ Alert sent to all users!')
-    setBroadcast({ title: '', message: '', severity: 'medium' })
-    setTimeout(() => setBroadcastMsg(''), 3000)
+    try {
+      await client.post('/admin/broadcast', broadcast)
+      setBroadcastMsg('✅ Alert sent to all users!')
+      setBroadcast({ title: '', message: '', severity: 'medium' })
+      setTimeout(() => setBroadcastMsg(''), 3000)
+    } catch (err) {
+      setBroadcastMsg(err.response?.data?.message || 'Broadcast failed')
+    }
   }
 
   function timeAgo(d) {

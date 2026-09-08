@@ -133,7 +133,7 @@ async function updateTrustScore(client, userId, delta) {
      RETURNING trust_score`,
     [delta, userId]
   )
-  const score = result.rows[0]?.trust_score || 100
+  const score = result.rows[0]?.trust_score ?? 100
   const tier =
     score >= 800 ? 'Hero' :
     score >= 600 ? 'Guardian' :
@@ -623,7 +623,12 @@ router.delete('/:id', verifyToken, async (req, res, next) => {
   if (isNaN(reportId)) return res.status(400).json({ message: 'Invalid report ID' })
 
   // Read-only checks before acquiring a transaction client
-  const { rows } = await pool.query('SELECT * FROM reports WHERE id = $1', [reportId])
+  let rows
+  try {
+    ;({ rows } = await pool.query('SELECT * FROM reports WHERE id = $1', [reportId]))
+  } catch (err) {
+    return next(err)
+  }
   if (rows.length === 0) return res.status(404).json({ message: 'Report not found' })
 
   const report = rows[0]
