@@ -198,7 +198,7 @@ export default function Report() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [categories, setCategories] = useState(HAZARD_TYPES_FALLBACK)
+  const [categories, setCategories] = useState(HAZARD_TYPES_FALLBACK.map(name => ({ name, icon: null })))
   const [form, setForm] = useState({
     hazard_type: '', severity: '', description: '',
     latitude: '', longitude: '', location_method: 'gps',
@@ -225,17 +225,17 @@ export default function Report() {
       if (cached) {
         const { data, ts } = JSON.parse(cached)
         if (Date.now() - ts < TTL) {
-          setCategories(data.map(c => c.name))
+          setCategories(data)
           return
         }
       }
     } catch {}
     client.get('/master/categories')
       .then(({ data }) => {
-        setCategories(data.map(c => c.name))
+        setCategories(data)
         localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }))
       })
-      .catch(() => setCategories(HAZARD_TYPES_FALLBACK))
+      .catch(() => setCategories(HAZARD_TYPES_FALLBACK.map(name => ({ name, icon: null }))))
   }, [])
 
   const reverseGeocode = async (lat, lng) => {
@@ -445,21 +445,21 @@ export default function Report() {
 
               {/* Hazard type grid — 2 cols mobile, 3 cols sm+ */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {categories.map(t => (
+                {categories.map(cat => (
                   <button
-                    key={t}
+                    key={cat.name}
                     type="button"
-                    onClick={() => setForm(f => ({ ...f, hazard_type: t, custom_description: '' }))}
+                    onClick={() => setForm(f => ({ ...f, hazard_type: cat.name, custom_description: '' }))}
                     className={`flex flex-col items-center gap-2 p-3 rounded-2xl border text-center transition-all focus:outline-none ${
-                      form.hazard_type === t
+                      form.hazard_type === cat.name
                         ? 'border-accent bg-accent/10 text-accent'
                         : 'border-edge bg-elevated text-muted hover:border-accent/40 hover:text-light'
                     }`}
                   >
                     <span className="text-2xl" aria-hidden="true">
-                      {HAZARD_ICON_MAP[t] || '⚠️'}
+                      {cat.icon || HAZARD_ICON_MAP[cat.name] || '⚠️'}
                     </span>
-                    <span className="text-caption font-medium leading-tight">{t}</span>
+                    <span className="text-caption font-medium leading-tight">{cat.name}</span>
                   </button>
                 ))}
               </div>
