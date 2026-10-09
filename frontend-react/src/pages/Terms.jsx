@@ -133,7 +133,7 @@ export default function Terms() {
           </Section>
 
           <Section id="payments" title="Pricing">
-            <p>The Service is currently provided at no charge. HetuSafe does not collect or process payment information. We reserve the right to introduce optional paid features in the future; if pricing changes, we will provide advance notice to existing users. Contact us at arishwanthreddy@gmail.com with any questions.</p>
+            <p>The Service is currently provided at no charge. HetuSafe does not collect or process payment information. We reserve the right to introduce optional paid features in the future; if pricing changes, we will provide advance notice to existing users. Contact us at support@hetusafe.com with any questions.</p>
           </Section>
 
           <Section id="liability" title="Limitation of Liability">
@@ -156,7 +156,7 @@ export default function Terms() {
           <Section id="contact" title="Contact">
             <p>For questions about these Terms:</p>
             <ul>
-              <li><strong>Email:</strong> arishwanthreddy@gmail.com</li>
+              <li><strong>Email:</strong> support@hetusafe.com</li>
               <li><strong>Response time:</strong> Within 5 business days</li>
             </ul>
           </Section>

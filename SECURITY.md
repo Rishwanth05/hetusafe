@@ -32,7 +32,7 @@ Given the nature of this application, we are especially interested in reports in
 
 Report security issues by email to:
 
-**arishwanthreddy@gmail.com**
+**support@hetusafe.com**
 
 Include in your report:
 - A clear description of the vulnerability and its potential impact
