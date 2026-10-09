@@ -241,6 +241,6 @@ npm run test:coverage
 
 **Rishwanth Reddy Adamala**
 
-[GitHub](https://github.com/Rishwanth05) • [LinkedIn](https://www.linkedin.com/in/rishwanth-reddy/) • [Email](mailto:rishwanthreddy05@gmail.com)
+[GitHub](https://github.com/Rishwanth05) • [LinkedIn](https://www.linkedin.com/in/rishwanth-reddy/) • [Email](mailto:support@hetusafe.com)
 
 All rights reserved. Contact the author for reuse permissions.

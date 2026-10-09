@@ -145,7 +145,7 @@ export default function Privacy() {
             <p>If you are located in the European Economic Area or United Kingdom, you have additional rights under the General Data Protection Regulation, including the right to restrict or object to certain processing, and the right to lodge a complaint with your local supervisory authority.</p>
             <SubHeading>California residents (CCPA / CPRA)</SubHeading>
             <p>If you are a California resident, you have rights under the California Consumer Privacy Act and California Privacy Rights Act, including the right to know what personal information is collected and how it is used, the right to delete, the right to correct inaccurate personal information, and the right not to be discriminated against for exercising these rights. HetuSafe does not sell or share personal information as those terms are defined under California law.</p>
-            <p>To exercise any of the above rights, use the account deletion flow in your Profile page, or contact us at <strong>arishwanthreddy@gmail.com</strong>. We will respond within 30 days.</p>
+            <p>To exercise any of the above rights, use the account deletion flow in your Profile page, or contact us at <strong>support@hetusafe.com</strong>. We will respond within 30 days.</p>
             <Callout>Account deletion is self-service. Go to Profile → Delete Account → verify with OTP. Your data is purged immediately.</Callout>
           </Section>
 
@@ -171,7 +171,7 @@ export default function Privacy() {
           <Section id="contact" title="Contact Us">
             <p>For privacy-related questions, data requests, or to report a concern:</p>
             <ul>
-              <li><strong>Email:</strong> arishwanthreddy@gmail.com</li>
+              <li><strong>Email:</strong> support@hetusafe.com</li>
               <li><strong>Response time:</strong> Within 5 business days for general enquiries, within 30 days for GDPR/CCPA requests</li>
             </ul>
             <p>HetuSafe is operated independently. We are not affiliated with any government agency.</p>

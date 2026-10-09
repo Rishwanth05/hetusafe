@@ -188,7 +188,7 @@ export default function Contact() {
         {/* Info cards */}
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: '📧', title: 'Email Us',       desc: 'arishwanthreddy@gmail.com' },
+            { icon: '📧', title: 'Email Us',       desc: 'support@hetusafe.com' },
             { icon: '⏱️', title: 'Response Time',  desc: 'Within 24 hours'          },
           ].map(({ icon, title, desc }) => (
             <Card key={title} className="p-5 text-center">
