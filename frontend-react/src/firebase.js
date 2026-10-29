@@ -25,8 +25,10 @@ export { messaging };
 export async function requestNotificationPermission() {
   if (!messaging) return null;
   try {
-    await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.register(
+      '/firebase-messaging-sw.js',
+      { scope: '/firebase-cloud-messaging-push-scope' }
+    );
     const token = await getToken(messaging, {
       vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
       serviceWorkerRegistration: registration,
