@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { buildPopupNode } from '../utils/buildPopupNode'
 
 const SEVERITY_COLORS = {
   low: '#22c55e',
@@ -173,17 +174,15 @@ export default function Map({ reports = [], onLocationSelect, center = [-98.5, 3
 
         popupRef.current = new maplibregl.Popup({ offset: 12 })
           .setLngLat(coords)
-          .setHTML(`
-            <div style="font-family:Inter,sans-serif;min-width:210px">
-              <strong style="font-size:14px;color:#F5F5F5">${props.hazard_type}</strong><br/>
-              <span style="font-size:12px;color:#9CA3AF;text-transform:capitalize">Severity: ${props.severity}</span><br/>
-              <p style="font-size:13px;color:#D1D5DB;margin:6px 0 4px">${props.description?.slice(0, 80) || ''}${props.description?.length > 80 ? '…' : ''}</p>
-              <hr style="margin:6px 0;border:none;border-top:1px solid #2A332E"/>
-              <span style="font-size:12px;color:#9CA3AF">📅 ${localDate}</span><br/>
-              <span style="font-size:12px;color:#9CA3AF">⏰ ${localTime} · ${timeAgo}</span><br/>
-              ${props.name ? `<span style="font-size:12px;color:#9CA3AF">👤 ${props.name}</span>` : ''}
-            </div>
-          `)
+          .setDOMContent(buildPopupNode({
+            hazard_type: props.hazard_type,
+            severity:    props.severity,
+            description: props.description,
+            name:        props.name,
+            localDate,
+            localTime,
+            timeAgo,
+          }))
           .addTo(mapRef.current)
       })
 
