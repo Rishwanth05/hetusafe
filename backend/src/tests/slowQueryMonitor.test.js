@@ -53,6 +53,9 @@ describe('slow-query monitor — health-probe exclusion (_skipSlowQuery)', () =>
   });
 
   test('fast query reports nothing regardless of the flag', async () => {
+    // Warm the connection before installing the spy so a cold first-connect
+    // latency cannot push the subsequent SELECT 1 assertions past 200 ms.
+    await pool.query('SELECT 1');
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       await pool.query({ text: 'SELECT 1', _skipSlowQuery: true });
