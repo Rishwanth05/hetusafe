@@ -1,77 +1,60 @@
 'use strict';
 
-// Mock firebase-admin before the real module loads — the mock is applied when
-// config/firebase.js requires 'firebase-admin' inside jest.requireActual below.
-const mockSend = jest.fn();
-const mockSendEachForMulticast = jest.fn();
+// lib/pushMessage is not matched by the moduleNameMapper entry for
+// 'config/firebase', so the real module is loaded — no extra setup needed.
+const { buildPushMessage } = require('../lib/pushMessage');
 
-jest.mock('firebase-admin', () => ({
-  apps: [],
-  initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: () => ({
-    send: mockSend,
-    sendEachForMulticast: mockSendEachForMulticast,
-  }),
-}));
-
-// jest.requireActual bypasses moduleNameMapper, loading the real config/firebase.js
-// instead of the jest.fn() stub in __mocks__/firebase.js.
-const { sendPushNotification, sendPushNotificationBatch } =
-  jest.requireActual('../config/firebase');
-
-describe('FCM payload shape — data-only (no notification field)', () => {
-  beforeEach(() => {
-    mockSend.mockReset();
-    mockSendEachForMulticast.mockReset();
-    mockSend.mockResolvedValue('projects/proj/messages/msg-id');
-    mockSendEachForMulticast.mockResolvedValue({
-      successCount: 1,
-      failureCount: 0,
-      responses: [{ success: true }],
-    });
+describe('buildPushMessage — FCM payload helper', () => {
+  it('returns data-only: no notification key', () => {
+    const msg = buildPushMessage('Title', 'Body', {});
+    expect(msg).not.toHaveProperty('notification');
   });
 
-  // ── sendPushNotification ────────────────────────────────────────────────────
-
-  describe('sendPushNotification', () => {
-    it('omits the notification key', async () => {
-      await sendPushNotification('tok', 'Title', 'Body', { type: 'x' });
-      const msg = mockSend.mock.calls[0][0];
-      expect(msg).not.toHaveProperty('notification');
-    });
-
-    it('puts title and body in data', async () => {
-      await sendPushNotification('tok', 'My Title', 'My Body', {});
-      const msg = mockSend.mock.calls[0][0];
-      expect(msg.data).toMatchObject({ title: 'My Title', body: 'My Body' });
-    });
-
-    it('stringifies extra data fields alongside title and body', async () => {
-      await sendPushNotification('tok', 'T', 'B', { type: 'new_report', reportId: 99 });
-      const msg = mockSend.mock.calls[0][0];
-      expect(msg.data).toEqual({ title: 'T', body: 'B', type: 'new_report', reportId: '99' });
-    });
+  it('puts title and body in data', () => {
+    const msg = buildPushMessage('My Title', 'My Body', {});
+    expect(msg.data).toMatchObject({ title: 'My Title', body: 'My Body' });
   });
 
-  // ── sendPushNotificationBatch ───────────────────────────────────────────────
+  it('stringifies numeric extra data fields', () => {
+    const msg = buildPushMessage('T', 'B', { type: 'new_report', reportId: 99 });
+    expect(msg.data).toEqual({ type: 'new_report', reportId: '99', title: 'T', body: 'B' });
+  });
 
-  describe('sendPushNotificationBatch', () => {
-    it('omits the notification key in the multicast payload', async () => {
-      await sendPushNotificationBatch(['t1', 't2'], 'Title', 'Body', { type: 'x' });
-      const msg = mockSendEachForMulticast.mock.calls[0][0];
-      expect(msg).not.toHaveProperty('notification');
+  it('title and body override caller keys of the same name', () => {
+    const msg = buildPushMessage('Real Title', 'Real Body', {
+      title: 'caller-title',
+      body: 'caller-body',
+      type: 'x',
     });
+    expect(msg.data.title).toBe('Real Title');
+    expect(msg.data.body).toBe('Real Body');
+    expect(msg.data.type).toBe('x');
+  });
 
-    it('puts title and body in data for batch', async () => {
-      await sendPushNotificationBatch(['t1'], 'Batch Title', 'Batch Body', {});
-      const msg = mockSendEachForMulticast.mock.calls[0][0];
-      expect(msg.data).toMatchObject({ title: 'Batch Title', body: 'Batch Body' });
-    });
+  it('stringifies boolean extra data fields', () => {
+    const msg = buildPushMessage('T', 'B', { urgent: true, count: 0 });
+    expect(msg.data.urgent).toBe('true');
+    expect(msg.data.count).toBe('0');
+  });
 
-    it('returns early without calling send when tokens array is empty', async () => {
-      await sendPushNotificationBatch([], 'T', 'B', {});
-      expect(mockSendEachForMulticast).not.toHaveBeenCalled();
+  it('works with no extra data argument', () => {
+    const msg = buildPushMessage('T', 'B');
+    expect(msg.data).toEqual({ title: 'T', body: 'B' });
+  });
+
+  it('returns the correct shape for a typical new-report push', () => {
+    const msg = buildPushMessage('🚨 New Report', 'A hazard nearby', {
+      type: 'new_report',
+      reportId: 42,
     });
+    expect(msg).toEqual({
+      data: {
+        type: 'new_report',
+        reportId: '42',
+        title: '🚨 New Report',
+        body: 'A hazard nearby',
+      },
+    });
+    expect(msg).not.toHaveProperty('notification');
   });
 });

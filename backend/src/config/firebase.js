@@ -1,4 +1,5 @@
 const admin = require('firebase-admin')
+const { buildPushMessage } = require('../lib/pushMessage')
 
 if (!admin.apps.length) {
   try {
@@ -14,16 +15,7 @@ if (!admin.apps.length) {
 
 async function sendPushNotification(token, title, body, data = {}) {
   try {
-    const message = {
-      token,
-      data: {
-        title,
-        body,
-        ...Object.fromEntries(
-          Object.entries(data).map(([k, v]) => [k, String(v)])
-        ),
-      },
-    };
+    const message = { token, ...buildPushMessage(title, body, data) };
     const response = await admin.messaging().send(message);
     console.log(`FCM sent to ${token.slice(0, 20)}...: ${response}`);
   } catch (err) {
@@ -35,15 +27,7 @@ const FCM_CHUNK_SIZE = 500;
 
 async function sendPushNotificationBatch(tokens, title, body, data = {}) {
   if (!tokens || tokens.length === 0) return;
-  const payload = {
-    data: {
-      title,
-      body,
-      ...Object.fromEntries(
-        Object.entries(data).map(([k, v]) => [k, String(v)])
-      ),
-    },
-  };
+  const payload = buildPushMessage(title, body, data);
   let totalSuccess = 0;
   for (let i = 0; i < tokens.length; i += FCM_CHUNK_SIZE) {
     const chunk = tokens.slice(i, i + FCM_CHUNK_SIZE);
