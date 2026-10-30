@@ -62,6 +62,8 @@ function reportSlowQuery(sql, duration) {
 }
 
 // Preserves all pg call signatures (text, text+values, query-object) through spread.
+// Callers can set _skipSlowQuery: true on a query object to opt out of monitoring
+// (used by the /health probe so routine connection warm-ups are not reported).
 function wrapQuery(queryFn) {
   return async function slowQueryAware(...args) {
     const start = Date.now();
@@ -69,6 +71,7 @@ function wrapQuery(queryFn) {
     const duration = Date.now() - start;
     if (duration > 200) {
       const text = args[0];
+      if (text && text._skipSlowQuery) return result;
       const sql = typeof text === 'string' ? text : (text && text.text) || '';
       reportSlowQuery(sql, duration);
     }

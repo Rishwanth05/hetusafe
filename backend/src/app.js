@@ -79,7 +79,7 @@ app.get('/health', async (req, res) => {
   }
 
   const [dbResult, redisResult] = await Promise.allSettled([
-    withTimeout(pool.query('SELECT 1'), HEALTH_TIMEOUT_MS),
+    withTimeout(pool.query({ text: 'SELECT 1', _skipSlowQuery: true }), HEALTH_TIMEOUT_MS),
     withTimeout(redis.ping(),           HEALTH_TIMEOUT_MS),
   ]);
 
