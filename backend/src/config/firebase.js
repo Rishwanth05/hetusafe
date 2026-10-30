@@ -16,10 +16,13 @@ async function sendPushNotification(token, title, body, data = {}) {
   try {
     const message = {
       token,
-      notification: { title, body },
-      data: Object.fromEntries(
-        Object.entries(data).map(([k, v]) => [k, String(v)])
-      ),
+      data: {
+        title,
+        body,
+        ...Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, String(v)])
+        ),
+      },
     };
     const response = await admin.messaging().send(message);
     console.log(`FCM sent to ${token.slice(0, 20)}...: ${response}`);
@@ -33,10 +36,13 @@ const FCM_CHUNK_SIZE = 500;
 async function sendPushNotificationBatch(tokens, title, body, data = {}) {
   if (!tokens || tokens.length === 0) return;
   const payload = {
-    notification: { title, body },
-    data: Object.fromEntries(
-      Object.entries(data).map(([k, v]) => [k, String(v)])
-    ),
+    data: {
+      title,
+      body,
+      ...Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, String(v)])
+      ),
+    },
   };
   let totalSuccess = 0;
   for (let i = 0; i < tokens.length; i += FCM_CHUNK_SIZE) {
