@@ -19,6 +19,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,xml}'],
+        // firebase-messaging-sw.js is a separate service worker, not a precacheable asset
+        globIgnores: ['firebase-messaging-sw.js'],
         runtimeCaching: [
           {
             // Always fetch reports fresh — never cache

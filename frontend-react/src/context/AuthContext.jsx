@@ -19,6 +19,17 @@ export function AuthProvider({ children }) {
         .then((data) => {
           if (data && data.user) {
             setUser(data.user)
+            // Refresh the FCM token so already-logged-in users keep push working
+            // after a new SW registration. Fire-and-forget: never blocks authReady.
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              requestNotificationPermission()
+                .then((fcmToken) => {
+                  if (fcmToken) {
+                    client.post('/auth/fcm-token', { token: fcmToken }).catch(() => {})
+                  }
+                })
+                .catch(() => {})
+            }
           }
         })
         .catch(() => {

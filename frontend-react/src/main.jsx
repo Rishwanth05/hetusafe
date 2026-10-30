@@ -7,6 +7,11 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     environment: import.meta.env.MODE,
     tracesSampleRate: 0.2,
     replaysOnErrorSampleRate: 0,
+    beforeSend(event) {
+      const msg = event.exception?.values?.[0]?.value ?? ''
+      if (/Failed to register a ServiceWorker/.test(msg)) return null
+      return event
+    },
   })
 }
 
